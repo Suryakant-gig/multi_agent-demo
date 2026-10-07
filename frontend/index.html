@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OmniData AI — Intelligent Spreadsheet & Agent Analytics</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="index.css">
+</head>
+<body>
+  <div class="app-layout">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="logo-mark">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+          </svg>
+        </div>
+        <div class="brand-text">
+          <h2>OmniData <span class="gradient-text">AI</span></h2>
+          <span class="sub-label">Agentic Analytics Engine</span>
+        </div>
+      </div>
+
+      <!-- Navigation Tabs -->
+      <nav class="nav-menu">
+        <button class="nav-item active" data-tab="chat">
+          <span class="nav-icon">💬</span>
+          <span>Agent Chat</span>
+        </button>
+        <button class="nav-item" data-tab="search">
+          <span class="nav-icon">🔍</span>
+          <span>Direct Search</span>
+        </button>
+        <button class="nav-item" data-tab="charts">
+          <span class="nav-icon">📊</span>
+          <span>Chart Studio</span>
+        </button>
+        <button class="nav-item" data-tab="schema">
+          <span class="nav-icon">🗂️</span>
+          <span>Data Profiler</span>
+        </button>
+      </nav>
+
+      <!-- Active Dataset Card -->
+      <div class="dataset-card" id="datasetCard">
+        <div class="dataset-header">
+          <span class="card-title">ACTIVE DATASET</span>
+          <span class="badge" id="rowCountBadge">No file</span>
+        </div>
+        <div class="dataset-info" id="datasetInfo">
+          <p class="empty-hint">Upload a CSV or Excel file to begin analyzing.</p>
+        </div>
+        <div class="column-tags" id="columnTags"></div>
+      </div>
+
+      <!-- Quick Session Controls -->
+      <div class="session-footer">
+        <div class="session-badge">
+          <span class="pulse-dot"></span>
+          <span id="sessionStatus">API Connected</span>
+        </div>
+        <button class="btn-ghost" id="newSessionBtn" title="Reset Session">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
+            <path d="M21 3v5h-5M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
+            <path d="M8 16H3v5"/>
+          </svg>
+          Reset Session
+        </button>
+      </div>
+    </aside>
+
+    <!-- Main Workspace -->
+    <main class="main-content">
+      <!-- Top Bar -->
+      <header class="topbar">
+        <div class="session-id-wrapper">
+          <span class="label">SESSION ID:</span>
+          <code id="displaySessionId">initializing...</code>
+        </div>
+        <div class="top-actions">
+          <button class="btn-secondary" id="loadSampleBtn">
+            <span>✨</span> Load Sample Sales Dataset
+          </button>
+          <label class="btn-primary" for="fileInput">
+            <span>📁</span> Upload CSV / Excel
+            <input type="file" id="fileInput" accept=".csv,.xlsx,.xls" style="display: none;">
+          </label>
+        </div>
+      </header>
+
+      <!-- TAB 1: Chat Interface -->
+      <section class="tab-pane active" id="pane-chat">
+        <!-- Chat History Container -->
+        <div class="chat-container" id="chatContainer">
+          <!-- Welcome Message -->
+          <div class="message-row assistant">
+            <div class="avatar ai-avatar">AI</div>
+            <div class="message-bubble">
+              <div class="message-header">
+                <span class="sender-name">OmniData Assistant</span>
+                <span class="timestamp">Just now</span>
+              </div>
+              <div class="message-body">
+                <p>Welcome! I'm your AI data analysis assistant. You can upload an Excel (<code>.xlsx</code>, <code>.xls</code>) or <code>.csv</code> spreadsheet, and I will analyze metrics, rank Top-K categories, retrieve records with citations, or create charts.</p>
+                <p>Click <strong>"Load Sample Sales Dataset"</strong> above or upload your own file to start exploring!</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Suggested Prompts / Chips -->
+        <div class="prompt-chips" id="promptChips">
+          <span class="chip-label">Suggestions:</span>
+          <button class="chip" data-prompt="Show me the top 5 products by revenue">Top 5 products by revenue</button>
+          <button class="chip" data-prompt="Make a chart for that">Make a chart for that</button>
+          <button class="chip" data-prompt="Find any records about Headphones">Search for Headphones</button>
+          <button class="chip" data-prompt="What columns are in this dataset?">Show dataset schema</button>
+          <button class="chip" data-prompt="Top 5 categories by sales count">Top categories by count</button>
+        </div>
+
+        <!-- Input Bar -->
+        <div class="chat-input-bar">
+          <textarea id="chatInput" placeholder="Ask a question about your data... (e.g. 'Show me top 5 products by revenue' or 'Make a chart for that')" rows="1"></textarea>
+          <button class="send-btn" id="sendBtn" title="Send message">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="22" y1="2" x2="11" y2="13"/>
+              <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+            </svg>
+          </button>
+        </div>
+      </section>
+
+      <!-- TAB 2: Direct Search Hub -->
+      <section class="tab-pane" id="pane-search">
+        <div class="panel-header">
+          <h2>Direct Data Retrieval & Top-K Ranking</h2>
+          <p>Search matching rows with relevance scoring, token weighting, and row-level source citations.</p>
+        </div>
+        <div class="search-form-card">
+          <div class="form-row">
+            <div class="input-group flex-grow">
+              <label for="directSearchQuery">Search Query</label>
+              <input type="text" id="directSearchQuery" placeholder="e.g. Laptop, Europe, Electronics...">
+            </div>
+            <div class="input-group" style="width: 140px;">
+              <label for="directTopK">Top-K Results</label>
+              <select id="directTopK">
+                <option value="5" selected>Top 5</option>
+                <option value="10">Top 10</option>
+                <option value="20">Top 20</option>
+              </select>
+            </div>
+            <button class="btn-primary search-action-btn" id="executeSearchBtn">Search Records</button>
+          </div>
+        </div>
+        <div class="results-container" id="searchResultsContainer">
+          <p class="empty-hint">Enter a query to view matching candidates.</p>
+        </div>
+      </section>
+
+      <!-- TAB 3: Chart Studio -->
+      <section class="tab-pane" id="pane-charts">
+        <div class="panel-header">
+          <h2>Chart Studio</h2>
+          <p>Generate high-resolution visualizations and declarative JSON specifications on demand.</p>
+        </div>
+        <div class="chart-builder-card">
+          <div class="form-grid">
+            <div class="input-group">
+              <label for="chartTypeSelect">Chart Type</label>
+              <select id="chartTypeSelect">
+                <option value="bar">Bar Chart</option>
+                <option value="line">Line Chart</option>
+                <option value="pie">Pie Chart</option>
+                <option value="scatter">Scatter Plot</option>
+                <option value="histogram">Histogram</option>
+                <option value="time_series">Time-Series</option>
+              </select>
+            </div>
+            <div class="input-group">
+              <label for="chartXSelect">X Column (Categories/Date)</label>
+              <select id="chartXSelect"><option value="">Select column</option></select>
+            </div>
+            <div class="input-group">
+              <label for="chartYSelect">Y Column (Metric)</label>
+              <select id="chartYSelect"><option value="">Select column (optional)</option></select>
+            </div>
+            <div class="input-group">
+              <label for="chartAggSelect">Aggregation</label>
+              <select id="chartAggSelect">
+                <option value="SUM">SUM</option>
+                <option value="AVG">AVG</option>
+                <option value="COUNT">COUNT</option>
+                <option value="MAX">MAX</option>
+                <option value="MIN">MIN</option>
+              </select>
+            </div>
+          </div>
+          <div class="builder-actions">
+            <button class="btn-primary" id="renderChartBtn">Generate Chart</button>
+          </div>
+        </div>
+        <div class="chart-preview-container" id="chartPreviewContainer">
+          <p class="empty-hint">Select parameters and click Generate Chart.</p>
+        </div>
+      </section>
+
+      <!-- TAB 4: Data Profiler -->
+      <section class="tab-pane" id="pane-schema">
+        <div class="panel-header">
+          <h2>Dataset Profiler & Schema Inspector</h2>
+          <p>Inspect detected types, cardinality, missing values, and queryable sample rows.</p>
+        </div>
+        <div class="profiler-content" id="profilerContent">
+          <p class="empty-hint">No dataset loaded. Upload a file or load sample data.</p>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Image Zoom Modal -->
+  <div class="modal-overlay" id="imageModal" style="display: none;">
+    <div class="modal-dialog">
+      <button class="modal-close" id="modalCloseBtn">&times;</button>
+      <img id="modalImg" src="" alt="Zoomed Chart">
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

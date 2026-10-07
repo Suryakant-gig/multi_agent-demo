@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  data-agent-api:
+    build: .
+    container_name: data_agent_api
+    ports:
+      - "8000:8000"
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8000
+      - DEBUG=False
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - GEMINI_MODEL=gemini-2.5-flash
+    volumes:
+      - ./data/uploads:/app/data/uploads
+      - ./data/dbs:/app/data/dbs
+    restart: unless-stopped

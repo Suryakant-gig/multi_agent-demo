@@ -1,0 +1,21 @@
+transaction_id,date,product,category,revenue,quantity,region,customer_rating
+TX-1001,2026-01-05,MacBook Pro 16,Laptops,2499.00,1,North America,4.9
+TX-1002,2026-01-06,Dell XPS 15,Laptops,1899.50,2,Europe,4.7
+TX-1003,2026-01-07,iPhone 15 Pro,Smartphones,1199.00,3,Asia,4.8
+TX-1004,2026-01-08,Samsung Galaxy S24,Smartphones,999.00,2,North America,4.6
+TX-1005,2026-01-09,Sony WH-1000XM5,Audio,399.00,5,Europe,4.9
+TX-1006,2026-01-10,AirPods Pro 2,Audio,249.00,8,Asia,4.7
+TX-1007,2026-01-11,iPad Air,Tablets,599.00,4,North America,4.8
+TX-1008,2026-01-12,MacBook Air 15,Laptops,1299.00,3,Europe,4.8
+TX-1009,2026-01-13,Google Pixel 8,Smartphones,799.00,3,North America,4.5
+TX-1010,2026-01-14,Bose QuietComfort,Audio,349.00,4,Asia,4.6
+TX-1011,2026-01-15,Logitech MX Master 3S,Accessories,99.00,15,Europe,4.9
+TX-1012,2026-01-16,Keychron Q1 Pro,Accessories,199.00,6,North America,4.8
+TX-1013,2026-01-17,LG UltraFine 32,Displays,1299.00,2,Asia,4.7
+TX-1014,2026-01-18,Dell UltraSharp 27,Displays,649.00,4,Europe,4.6
+TX-1015,2026-01-19,MacBook Pro 14,Laptops,1999.00,2,North America,4.9
+TX-1016,2026-01-20,Apple Watch Ultra 2,Wearables,799.00,3,Asia,4.8
+TX-1017,2026-01-21,Garmin Fenix 7,Wearables,699.00,2,Europe,4.7
+TX-1018,2026-01-22,Kindle Paperwhite,Tablets,149.00,7,North America,4.7
+TX-1019,2026-01-23,Anker 737 PowerBank,Accessories,149.00,10,Asia,4.8
+TX-1020,2026-01-24,Samsung Galaxy Tab S9,Tablets,899.00,2,Europe,4.6
