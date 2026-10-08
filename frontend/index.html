@@ -3,177 +3,249 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>OmniData AI — Intelligent Spreadsheet & Agent Analytics</title>
+  <title>InfinityGPT — AI Data Analysis & Research Workspace</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="index.css">
 </head>
-<body>
-  <div class="app-layout">
-    <!-- Sidebar -->
-    <aside class="sidebar">
-      <div class="brand">
-        <div class="logo-mark">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
-          </svg>
+<body class="dark-theme">
+  <div class="infinity-app">
+
+    <!-- LEFT SIDEBAR -->
+    <aside class="infinity-sidebar" id="sidebar">
+      <div class="sidebar-top">
+        <div class="brand">
+          <div class="logo-icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm0 18a8 8 0 1 1 8-8 8 8 0 0 1-8 8z"/>
+              <path d="M8 12a4 4 0 1 0 4-4 4 4 0 0 0-4 4zm8 0a4 4 0 1 0-4 4 4 4 0 0 0 4-4z"/>
+            </svg>
+          </div>
+          <div class="brand-text">
+            <span class="brand-title">Infinity<span class="brand-accent">GPT</span></span>
+            <span class="brand-badge">2.0</span>
+          </div>
         </div>
-        <div class="brand-text">
-          <h2>OmniData <span class="gradient-text">AI</span></h2>
-          <span class="sub-label">Agentic Analytics Engine</span>
+
+        <button class="new-chat-btn" id="newChatBtn" title="Start a new conversation">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+          </svg>
+          <span>New Chat</span>
+        </button>
+      </div>
+
+      <!-- Conversation History Groups -->
+      <div class="history-scroll-area">
+        <div class="history-section" id="sectionToday">
+          <div class="section-label">Today</div>
+          <div class="conversation-list" id="listToday"></div>
+        </div>
+
+        <div class="history-section" id="sectionYesterday">
+          <div class="section-label">Yesterday</div>
+          <div class="conversation-list" id="listYesterday"></div>
+        </div>
+
+        <div class="history-section" id="sectionOlder">
+          <div class="section-label">Older</div>
+          <div class="conversation-list" id="listOlder"></div>
         </div>
       </div>
 
-      <!-- Navigation Tabs -->
-      <nav class="nav-menu">
-        <button class="nav-item active" data-tab="chat">
-          <span class="nav-icon">💬</span>
-          <span>Agent Chat</span>
-        </button>
-        <button class="nav-item" data-tab="search">
-          <span class="nav-icon">🔍</span>
-          <span>Direct Search</span>
-        </button>
-        <button class="nav-item" data-tab="charts">
-          <span class="nav-icon">📊</span>
-          <span>Chart Studio</span>
-        </button>
-        <button class="nav-item" data-tab="schema">
-          <span class="nav-icon">🗂️</span>
-          <span>Data Profiler</span>
-        </button>
-      </nav>
-
-      <!-- Active Dataset Card -->
-      <div class="dataset-card" id="datasetCard">
-        <div class="dataset-header">
-          <span class="card-title">ACTIVE DATASET</span>
-          <span class="badge" id="rowCountBadge">No file</span>
+      <!-- Active Workspace Context Card -->
+      <div class="context-card" id="contextCard">
+        <div class="context-card-header">
+          <span class="context-title">WORKSPACE FILES</span>
+          <span class="context-count" id="contextFileCount">0 attached</span>
         </div>
-        <div class="dataset-info" id="datasetInfo">
-          <p class="empty-hint">Upload a CSV or Excel file to begin analyzing.</p>
+        <div class="context-files" id="contextFilesList">
+          <p class="no-files-hint">No files attached yet. Upload CSV, Excel, or PDF.</p>
         </div>
-        <div class="column-tags" id="columnTags"></div>
       </div>
 
-      <!-- Quick Session Controls -->
-      <div class="session-footer">
-        <div class="session-badge">
-          <span class="pulse-dot"></span>
-          <span id="sessionStatus">API Connected</span>
-        </div>
-        <button class="btn-ghost" id="newSessionBtn" title="Reset Session">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
-            <path d="M21 3v5h-5M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
-            <path d="M8 16H3v5"/>
+      <!-- Sidebar Footer -->
+      <div class="sidebar-footer">
+        <button class="footer-action-btn" id="openSettingsBtn" title="Settings">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
           </svg>
-          Reset Session
+          <span>Settings</span>
+        </button>
+        <button class="footer-action-btn" id="openToolsBtn" title="Utilities">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path>
+          </svg>
+          <span>Data Tools</span>
         </button>
       </div>
     </aside>
 
-    <!-- Main Workspace -->
-    <main class="main-content">
-      <!-- Top Bar -->
-      <header class="topbar">
-        <div class="session-id-wrapper">
-          <span class="label">SESSION ID:</span>
-          <code id="displaySessionId">initializing...</code>
-        </div>
-        <div class="top-actions">
-          <button class="btn-secondary" id="loadSampleBtn">
-            <span>✨</span> Load Sample Sales Dataset
+    <!-- MAIN CHAT WORKSPACE -->
+    <main class="infinity-main">
+      <!-- Top Workspace Header -->
+      <header class="main-header">
+        <div class="header-left">
+          <button class="sidebar-toggle-btn" id="sidebarToggleBtn" title="Toggle Sidebar">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="3" y1="12" x2="21" y2="12"></line>
+              <line x1="3" y1="6" x2="21" y2="6"></line>
+              <line x1="3" y1="18" x2="21" y2="18"></line>
+            </svg>
           </button>
-          <label class="btn-primary" for="fileInput">
-            <span>📁</span> Upload CSV / Excel
-            <input type="file" id="fileInput" accept=".csv,.xlsx,.xls" style="display: none;">
-          </label>
-        </div>
-      </header>
-
-      <!-- TAB 1: Chat Interface -->
-      <section class="tab-pane active" id="pane-chat">
-        <!-- Chat History Container -->
-        <div class="chat-container" id="chatContainer">
-          <!-- Welcome Message -->
-          <div class="message-row assistant">
-            <div class="avatar ai-avatar">AI</div>
-            <div class="message-bubble">
-              <div class="message-header">
-                <span class="sender-name">OmniData Assistant</span>
-                <span class="timestamp">Just now</span>
-              </div>
-              <div class="message-body">
-                <p>Welcome! I'm your AI data analysis assistant. You can upload an Excel (<code>.xlsx</code>, <code>.xls</code>) or <code>.csv</code> spreadsheet, and I will analyze metrics, rank Top-K categories, retrieve records with citations, or create charts.</p>
-                <p>Click <strong>"Load Sample Sales Dataset"</strong> above or upload your own file to start exploring!</p>
-              </div>
-            </div>
+          <div class="model-pill">
+            <span class="model-name">InfinityGPT</span>
+            <span class="model-engine">Hybrid Agent</span>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="6 9 12 15 18 9"></polyline>
+            </svg>
           </div>
         </div>
 
-        <!-- Suggested Prompts / Chips -->
-        <div class="prompt-chips" id="promptChips">
-          <span class="chip-label">Suggestions:</span>
-          <button class="chip" data-prompt="Show me the top 5 products by revenue">Top 5 products by revenue</button>
-          <button class="chip" data-prompt="Make a chart for that">Make a chart for that</button>
-          <button class="chip" data-prompt="Find any records about Headphones">Search for Headphones</button>
-          <button class="chip" data-prompt="What columns are in this dataset?">Show dataset schema</button>
-          <button class="chip" data-prompt="Top 5 categories by sales count">Top categories by count</button>
+        <div class="header-center">
+          <span class="current-chat-title" id="currentChatTitle">New Chat</span>
         </div>
 
-        <!-- Input Bar -->
-        <div class="chat-input-bar">
-          <textarea id="chatInput" placeholder="Ask a question about your data... (e.g. 'Show me top 5 products by revenue' or 'Make a chart for that')" rows="1"></textarea>
-          <button class="send-btn" id="sendBtn" title="Send message">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <line x1="22" y1="2" x2="11" y2="13"/>
-              <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+        <div class="header-right">
+          <button class="header-btn" id="loadSampleBtn" title="Load sample sales dataset for testing">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+            </svg>
+            <span>Sample Sales Data</span>
+          </button>
+          <button class="header-btn icon-only" id="clearChatBtn" title="Clear messages">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="3 6 5 6 21 6"></polyline>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
             </svg>
           </button>
         </div>
-      </section>
+      </header>
 
-      <!-- TAB 2: Direct Search Hub -->
-      <section class="tab-pane" id="pane-search">
-        <div class="panel-header">
-          <h2>Direct Data Retrieval & Top-K Ranking</h2>
-          <p>Search matching rows with relevance scoring, token weighting, and row-level source citations.</p>
-        </div>
-        <div class="search-form-card">
-          <div class="form-row">
-            <div class="input-group flex-grow">
-              <label for="directSearchQuery">Search Query</label>
-              <input type="text" id="directSearchQuery" placeholder="e.g. Laptop, Europe, Electronics...">
+      <!-- Scrollable Message Feed -->
+      <section class="messages-container" id="messagesContainer">
+        <!-- Empty State / Welcome Screen -->
+        <div class="empty-state" id="emptyState">
+          <div class="empty-brand-icon">
+            <svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"></circle>
+              <path d="M8 12h8"></path>
+              <path d="M12 8v8"></path>
+            </svg>
+          </div>
+          <h1 class="empty-title">What would you like to explore today?</h1>
+          <p class="empty-subtitle">Upload spreadsheets, attach PDFs, or ask research questions across the web & literature.</p>
+
+          <div class="capabilities-grid">
+            <div class="cap-card">
+              <div class="cap-icon">📊</div>
+              <h3>Data & Spreadsheet Intelligence</h3>
+              <p>Top-K rankings, categorical group aggregations, SQL queries, and automatic charts.</p>
             </div>
-            <div class="input-group" style="width: 140px;">
-              <label for="directTopK">Top-K Results</label>
-              <select id="directTopK">
-                <option value="5" selected>Top 5</option>
-                <option value="10">Top 10</option>
-                <option value="20">Top 20</option>
-              </select>
+            <div class="cap-card">
+              <div class="cap-icon">🔬</div>
+              <h3>Autonomous Research Agent</h3>
+              <p>Multi-query literature search across arXiv and academic sources with verifiable citations.</p>
             </div>
-            <button class="btn-primary search-action-btn" id="executeSearchBtn">Search Records</button>
+            <div class="cap-card">
+              <div class="cap-icon">📄</div>
+              <h3>PDF & Document Retrieval</h3>
+              <p>Extract sections, summarize findings, and cite exact page numbers from uploaded documents.</p>
+            </div>
+          </div>
+
+          <div class="suggestion-chips" id="suggestionChips">
+            <span class="chips-title">Try asking:</span>
+            <button class="prompt-chip" data-prompt="Find 5 research papers about hybrid RAG retrieval and summarize them">📚 5 papers on hybrid RAG</button>
+            <button class="prompt-chip" data-prompt="Show me the top 5 products by revenue">📈 Top 5 products by revenue</button>
+            <button class="prompt-chip" data-prompt="Make a chart for that">📊 Make a chart for that</button>
+            <button class="prompt-chip" data-prompt="What are the recent developments in agentic RAG?">🤖 Developments in agentic RAG</button>
+            <button class="prompt-chip" data-prompt="Analyze sales.xlsx and explain the trend using consumer demand research">🔍 Mixed data + research analysis</button>
           </div>
         </div>
-        <div class="results-container" id="searchResultsContainer">
-          <p class="empty-hint">Enter a query to view matching candidates.</p>
-        </div>
+
+        <!-- Chat messages will be dynamically rendered here -->
+        <div class="message-feed" id="messageFeed"></div>
       </section>
 
-      <!-- TAB 3: Chart Studio -->
-      <section class="tab-pane" id="pane-charts">
-        <div class="panel-header">
-          <h2>Chart Studio</h2>
-          <p>Generate high-resolution visualizations and declarative JSON specifications on demand.</p>
+      <!-- BOTTOM MESSAGE COMPOSER -->
+      <div class="composer-container">
+        <!-- Staged attachments preview bar -->
+        <div class="attachments-preview-bar" id="attachmentsPreviewBar" style="display: none;"></div>
+
+        <!-- Composer Form -->
+        <form class="composer-box" id="composerForm" onsubmit="return false;">
+          <!-- Hidden file input -->
+          <input type="file" id="fileAttachmentInput" accept=".csv,.xlsx,.xls,.pdf" style="display: none;">
+
+          <!-- Attach Button -->
+          <button type="button" class="composer-btn attach-btn" id="attachBtn" title="Attach CSV, Excel, or PDF document">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path>
+            </svg>
+          </button>
+
+          <!-- Auto-growing Textarea -->
+          <textarea
+            id="messageInput"
+            class="composer-textarea"
+            placeholder="Message InfinityGPT... (Ask questions, analyze data, or attach CSV/Excel/PDF)"
+            rows="1"
+          ></textarea>
+
+          <!-- Send Button -->
+          <button type="submit" class="composer-btn send-btn" id="sendBtn" title="Send message" disabled>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <line x1="12" y1="19" x2="12" y2="5"></line>
+              <polyline points="5 12 12 5 19 12"></polyline>
+            </svg>
+          </button>
+        </form>
+
+        <div class="composer-footnote">
+          InfinityGPT can make mistakes. Verify critical facts and research citations.
         </div>
-        <div class="chart-builder-card">
+      </div>
+    </main>
+  </div>
+
+  <!-- SECONDARY TOOLS MODAL (Preserving Direct Search, Chart Studio, Profiler) -->
+  <div class="modal-overlay" id="toolsModal" style="display: none;">
+    <div class="modal-dialog tools-modal-dialog">
+      <div class="modal-header">
+        <div class="tools-tab-bar">
+          <button class="tool-tab-btn active" data-tool="search">🔍 Direct Search</button>
+          <button class="tool-tab-btn" data-tool="charts">📊 Chart Studio</button>
+          <button class="tool-tab-btn" data-tool="profiler">🗂️ Data Profiler</button>
+        </div>
+        <button class="modal-close-btn" id="toolsCloseBtn">&times;</button>
+      </div>
+      <div class="modal-body">
+        <!-- Direct Search Pane -->
+        <div class="tool-pane active" id="paneToolSearch">
+          <div class="form-row">
+            <input type="text" id="directSearchQuery" placeholder="Search rows across dataset (e.g. Laptop, Europe)..." class="tool-input">
+            <select id="directTopK" class="tool-select" style="width: 120px;">
+              <option value="5">Top 5</option>
+              <option value="10">Top 10</option>
+              <option value="20">Top 20</option>
+            </select>
+            <button class="btn-primary" id="executeSearchBtn">Search</button>
+          </div>
+          <div class="tool-results" id="searchResultsContainer">
+            <p class="empty-hint">Enter query to view matching candidates with row-level citations.</p>
+          </div>
+        </div>
+
+        <!-- Chart Studio Pane -->
+        <div class="tool-pane" id="paneToolCharts">
           <div class="form-grid">
-            <div class="input-group">
-              <label for="chartTypeSelect">Chart Type</label>
-              <select id="chartTypeSelect">
+            <div class="form-field">
+              <label>Chart Type</label>
+              <select id="chartTypeSelect" class="tool-select">
                 <option value="bar">Bar Chart</option>
                 <option value="line">Line Chart</option>
                 <option value="pie">Pie Chart</option>
@@ -182,17 +254,17 @@
                 <option value="time_series">Time-Series</option>
               </select>
             </div>
-            <div class="input-group">
-              <label for="chartXSelect">X Column (Categories/Date)</label>
-              <select id="chartXSelect"><option value="">Select column</option></select>
+            <div class="form-field">
+              <label>X Column</label>
+              <select id="chartXSelect" class="tool-select"><option value="">Select column</option></select>
             </div>
-            <div class="input-group">
-              <label for="chartYSelect">Y Column (Metric)</label>
-              <select id="chartYSelect"><option value="">Select column (optional)</option></select>
+            <div class="form-field">
+              <label>Y Column (Metric)</label>
+              <select id="chartYSelect" class="tool-select"><option value="">Select column</option></select>
             </div>
-            <div class="input-group">
-              <label for="chartAggSelect">Aggregation</label>
-              <select id="chartAggSelect">
+            <div class="form-field">
+              <label>Aggregation</label>
+              <select id="chartAggSelect" class="tool-select">
                 <option value="SUM">SUM</option>
                 <option value="AVG">AVG</option>
                 <option value="COUNT">COUNT</option>
@@ -201,33 +273,45 @@
               </select>
             </div>
           </div>
-          <div class="builder-actions">
+          <div style="margin-top: 12px; display: flex; justify-content: flex-end;">
             <button class="btn-primary" id="renderChartBtn">Generate Chart</button>
           </div>
+          <div class="tool-results" id="chartPreviewContainer">
+            <p class="empty-hint">Select columns and click Generate Chart.</p>
+          </div>
         </div>
-        <div class="chart-preview-container" id="chartPreviewContainer">
-          <p class="empty-hint">Select parameters and click Generate Chart.</p>
-        </div>
-      </section>
 
-      <!-- TAB 4: Data Profiler -->
-      <section class="tab-pane" id="pane-schema">
-        <div class="panel-header">
-          <h2>Dataset Profiler & Schema Inspector</h2>
-          <p>Inspect detected types, cardinality, missing values, and queryable sample rows.</p>
+        <!-- Profiler Pane -->
+        <div class="tool-pane" id="paneToolProfiler">
+          <div id="profilerContent">
+            <p class="empty-hint">No tabular dataset loaded. Upload a CSV/Excel file or load the sample data.</p>
+          </div>
         </div>
-        <div class="profiler-content" id="profilerContent">
-          <p class="empty-hint">No dataset loaded. Upload a file or load sample data.</p>
-        </div>
-      </section>
-    </main>
+      </div>
+    </div>
   </div>
 
-  <!-- Image Zoom Modal -->
+  <!-- IMAGE ZOOM MODAL -->
   <div class="modal-overlay" id="imageModal" style="display: none;">
-    <div class="modal-dialog">
-      <button class="modal-close" id="modalCloseBtn">&times;</button>
-      <img id="modalImg" src="" alt="Zoomed Chart">
+    <div class="modal-dialog image-modal-dialog">
+      <button class="modal-close-btn" id="imageCloseBtn">&times;</button>
+      <img id="modalImg" src="" alt="Full Resolution Chart">
+    </div>
+  </div>
+
+  <!-- SETTINGS MODAL -->
+  <div class="modal-overlay" id="settingsModal" style="display: none;">
+    <div class="modal-dialog settings-modal-dialog">
+      <div class="modal-header">
+        <h3 style="margin: 0;">Settings & Workspace Info</h3>
+        <button class="modal-close-btn" id="settingsCloseBtn">&times;</button>
+      </div>
+      <div class="modal-body" style="font-size: 0.9rem; line-height: 1.6;">
+        <p><strong>System:</strong> InfinityGPT 2.0</p>
+        <p><strong>Active Session ID:</strong> <code id="settingsSessionId">...</code></p>
+        <p><strong>Capabilities:</strong> Data Analysis, SQL Queries, Chart Generation, Academic Paper Research, PDF Extraction.</p>
+        <p><strong>Security:</strong> Untrusted web content isolated. Safe read-only SQLite storage engine.</p>
+      </div>
     </div>
   </div>
 

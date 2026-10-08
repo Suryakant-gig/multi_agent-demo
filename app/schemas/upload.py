@@ -1,4 +1,4 @@
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from pydantic import BaseModel, Field, ConfigDict
 from app.models.domain import ColumnMetadata
 
@@ -6,13 +6,17 @@ from app.models.domain import ColumnMetadata
 class UploadResponse(BaseModel):
     success: bool = True
     session_id: str
+    conversation_id: Optional[str] = None
     file_id: str
     file_name: str
     file_size_bytes: int
-    row_count: int
-    column_count: int
-    columns: List[ColumnMetadata]
+    row_count: int = 0
+    column_count: int = 0
+    columns: List[ColumnMetadata] = Field(default_factory=list)
+    file_type: str = "tabular"  # "tabular" | "pdf"
+    page_count: Optional[int] = None
     message: str = "File uploaded and processed successfully."
+
 
     model_config = ConfigDict(
         json_schema_extra={

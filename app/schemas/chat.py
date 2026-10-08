@@ -6,13 +6,14 @@ from app.models.domain import ToolCallRecord, CitationItem, ChartPayload
 class ChatRequest(BaseModel):
     query: str = Field(..., min_length=1, description="User's natural language question or command.")
     session_id: Optional[str] = Field(None, description="Existing session identifier. Created if omitted.")
+    conversation_id: Optional[str] = Field(None, description="Conversation identifier. Alias for session_id.")
     file_id: Optional[str] = Field(None, description="Target specific file, or defaults to session active file.")
 
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
                 "query": "Show me the top 5 products by revenue",
-                "session_id": "sess-12345"
+                "conversation_id": "conv_12345"
             }
         }
     )
@@ -20,13 +21,17 @@ class ChatRequest(BaseModel):
 
 class ChatResponse(BaseModel):
     session_id: str
+    conversation_id: Optional[str] = None
     query: str
     intent: str
     answer: str
     tool_calls: List[Dict[str, Any]] = Field(default_factory=list)
     citations: List[Dict[str, Any]] = Field(default_factory=list)
+    sources: List[Dict[str, Any]] = Field(default_factory=list)
+    attachments: List[Dict[str, Any]] = Field(default_factory=list)
     chart: Optional[Dict[str, Any]] = None
     duration_ms: float
+
 
     model_config = ConfigDict(
         json_schema_extra={

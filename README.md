@@ -1,560 +1,331 @@
-# AI-Powered Tabular Data Analysis, Search & Visualization Agent Platform
+# InfinityGPT — AI Data Analysis & Research Workspace
 
-A production-ready, modular, and scalable AI system designed to ingest Excel (`.xlsx`, `.xls`) and CSV files, parse schemas, manage stateful sessions, execute search and analytics workflows, and deliver Top-K insights, verifiable source citations, and dynamic visualizations through clean REST APIs.
+**InfinityGPT** is a production-oriented AI workspace inspired by ChatGPT, purpose-built for conversational tabular data analysis (Excel/CSV), academic research (arXiv/web), and document intelligence (PDF).
 
----
-
-## 1. Project Overview
-
-Modern enterprise data analysis frequently encounters large spreadsheets and CSVs that overwhelm standard in-memory pipelines or lack seamless natural-language interfaces. This platform combines:
-* **Streaming & Chunked Ingestion:** Handles large tabular files without in-memory bottlenecking by indexing rows into queryable embedded SQLite tables.
-* **Dual-Mode Agent Orchestration:** Employs Google Gemini (`gemini-2.5-flash` via the official `google-genai` SDK) when configured, and falls back to a deterministic semantic rule and query router for offline/air-gapped reliability.
-* **Stateful Multi-Turn Conversations:** Preserves context across turns, enabling coreference resolution (e.g. *"Show me the top 5 products"* followed by *"Make a chart for that"*).
-* **Two-Stage Retrieval & Source Citations:** Employs candidate retrieval, relevance ranking, deduplication, and row-level citation references (`Source: sales.csv (Row 12)`).
-* **Multi-Format Visualizations:** Generates Bar, Line, Pie, Scatter, Histogram, and Time-Series charts, returning both high-DPI Base64 image strings and declarative JSON specifications for frontend rendering.
+InfinityGPT seamlessly bridges data engineering and scientific literature research: users can analyze internal business datasets, search and cite uploaded PDFs by exact page, query live public web and academic papers with verifiable citations, and run hybrid workflows that explain empirical data patterns using academic literature.
 
 ---
 
-## 2. Architecture
+## 1. Core Architecture
 
 ```mermaid
 flowchart TD
-    Client([Client / Frontend / User]) -->|HTTP REST| FastAPI[FastAPI REST API Layer]
+    Client([User / Browser / REST Client]) -->|HTTP / JSON| FastAPI[FastAPI REST API Layer]
 
-    subgraph API_Endpoints ["API Endpoints (/api/v1)"]
-        FastAPI --> POST_Upload["POST /upload"]
+    subgraph API_Layer ["API Layer (/api/v1)"]
         FastAPI --> POST_Chat["POST /chat"]
+        FastAPI --> POST_Upload["POST /upload"]
+        FastAPI --> CRUD_Conv["/conversations (CRUD)"]
         FastAPI --> POST_Search["POST /search"]
         FastAPI --> POST_Chart["POST /chart"]
         FastAPI --> GET_Health["GET /health"]
     end
 
-    subgraph Ingestion_Storage ["File Ingestion & Queryable Storage"]
-        POST_Upload --> FileService[File Ingestion Service]
-        FileService --> Validator[Validation: Extension, Size & Emptiness]
-        Validator --> DataCleaner[Data Cleaner & Header Normalizer]
-        DataCleaner --> SchemaDetector[Schema Detector & Profiler]
-        DataCleaner --> StorageEngine[SQLite Storage Engine]
+    subgraph Conversation_State ["State & Conversation Management"]
+        CRUD_Conv --> SessionManager[Session & Conversation Manager]
+        POST_Chat --> SessionManager
+        SessionManager --> Persistence[(Disk Persistence: ./data/conversations)]
     end
 
-    subgraph State_Management ["State & Session Management"]
-        FastAPI --> SessionManager[Thread-Safe Session Manager]
-        SessionManager --> SessionState[Session Store: Files, Messages, Context Cache]
-    end
-
-    subgraph Agent_Core ["Agent Layer"]
+    subgraph Orchestration_Layer ["Agent Orchestrator & Intent Routing"]
         POST_Chat --> Orchestrator[Agent Orchestrator]
-        Orchestrator --> IntentDetector[Intent & Coreference Detector]
-        IntentDetector --> LLMClient[Gemini LLM / Semantic Router]
-        Orchestrator --> ToolRegistry[Tool Registry]
+        Orchestrator --> IntentDetector[Intent & Routing Engine]
     end
 
-    subgraph Tool_Suite ["Tool Layer"]
-        ToolRegistry --> ToolSearch["search_data"]
-        ToolRegistry --> ToolAgg["aggregate_data"]
-        ToolRegistry --> ToolChart["generate_chart"]
-        ToolRegistry --> ToolSchema["inspect_schema"]
-        ToolRegistry --> ToolSQL["query_sql"]
+    subgraph Specialized_Agents ["Specialized Capabilities"]
+        IntentDetector --> DataTools[Data Analysis Agent]
+        IntentDetector --> ResearchAgent[Research Agent]
+        IntentDetector --> DocRetriever[PDF Document Retriever]
+        IntentDetector --> HybridFlow[Hybrid Evidence Fusion]
     end
 
-    subgraph Retrieval_Visualization ["Retrieval & Visualization"]
-        ToolSearch --> SearchEngine[Search Engine: Recall & Filter]
-        SearchEngine --> Ranker[Relevance Ranker & Deduplication]
-        Ranker --> CitationGen[Citation Generator]
-        ToolChart --> VizService[Visualization Service]
-        VizService --> RenderEngine[Matplotlib & Spec Generator]
+    subgraph Data_Pipeline ["Tabular Data Pipeline"]
+        DataTools --> ToolRegistry[Tool Registry]
+        ToolRegistry --> aggregate_data[aggregate_data]
+        ToolRegistry --> search_data[search_data]
+        ToolRegistry --> generate_chart[generate_chart]
+        ToolRegistry --> inspect_schema[inspect_schema]
+        ToolRegistry --> query_sql[query_sql]
+        DataTools --> SQLiteEngine[(SQLite In-Memory / Disk Tables)]
     end
 
-    Tool_Suite --> StorageEngine
-    Orchestrator --> SessionManager
-    Orchestrator --> FastAPI
+    subgraph Research_Pipeline ["Research Pipeline"]
+        ResearchAgent --> ResearchPlanner[Research Planner]
+        ResearchPlanner --> WebSearchTool[web_search]
+        ResearchPlanner --> WebFetchTool[web_fetch]
+        WebSearchTool --> WebSearchProvider["Providers: Tavily / Serper / Brave / ArXiv"]
+        WebFetchTool --> SSRFGuard[SSRF Guard & Clean Text Extractor]
+        ResearchAgent --> WebRanker[Web & Scholarly Ranker]
+        ResearchAgent --> WebCitations[Verifiable Web Citations]
+    end
+
+    subgraph Document_Pipeline ["Document Pipeline (PDF)"]
+        POST_Upload --> PDFParser[PDF Page Parser & Scanned Detector]
+        PDFParser --> Chunker[Page-Aware Chunker]
+        Chunker --> DocStore[(Document SQLite Store)]
+        DocRetriever --> DocStore
+        DocRetriever --> PageCitations[Page Citations: Source: doc.pdf, Page X]
+    end
+
+    subgraph Synthesis_Output ["Evidence Fusion & Response Generation"]
+        HybridFlow --> EvidenceFusion[Evidence Fusion & Grounded Synthesis]
+        ResearchAgent --> EvidenceFusion
+        DataTools --> EvidenceFusion
+        DocRetriever --> EvidenceFusion
+        EvidenceFusion --> FinalResponse[Response: Answer + Charts + Citations + Clickable Sources]
+    end
 ```
 
 ---
 
-## 3. Folder Structure
+## 2. Key Capabilities
+
+### 1. ChatGPT-Style Workspace UI
+* **Sidebar Conversation History:** Automatically groups previous conversations into **Today**, **Yesterday**, and **Older**.
+* **Conversation Management:** Create new chats, restore full conversational context on click, inline-rename conversations, and delete chats with persistent disk storage.
+* **Modern Bottom Composer:** Features auto-growing textarea, Enter to send, Shift+Enter for newline, file attachment button (`[ + ]`), attached file chips, and drag-and-drop file upload.
+* **Rich Markdown & Visualizations:** Native rendering of Markdown headings, bold/italic, bullet/numbered lists, tables, syntax-formatted code blocks with copy button, and expandable tool execution indicators.
+* **Clickable Sources & Citations:** Explicit sources section listing authoritative paper/documentation links with clickable URLs, alongside verifiable row-level tabular citations (`Source: sales.csv (Row 42)`) and document page citations (`Source: paper.pdf, Page 8`).
+
+### 2. Autonomous Research Agent & Planning
+* **Query Understanding & Multi-Query Planning:** Formulates targeted multi-angle search queries covering definitions, architectures, and empirical benchmarks rather than executing single uncontrolled queries.
+* **Scholarly Authority Prioritization:** Automatically boosts arXiv, Semantic Scholar, ACM, IEEE, official documentation, and academic journals.
+* **Readable Page & Paper Fetching:** Fetches full article content for candidate evidence extraction with SSRF defenses and content length caps.
+* **Strict Grounding (No Hallucinations):** Never hallucinates papers, authors, publication dates, or URLs. If evidence is insufficient, the system transparently reports limitations.
+
+### 3. Tabular Data Intelligence
+* **Ingestion:** Supports CSV and Excel (`.xlsx`, `.xls`).
+* **Streaming & Chunking:** Ingests large CSV and Excel files in row chunks directly into SQLite, preventing memory exhaustion.
+* **Analytics Tools:** Includes `aggregate_data`, `search_data`, `generate_chart`, `inspect_schema`, and `query_sql` (read-only SQLite queries).
+* **Charts:** Bar, Line, Pie, Scatter, Histogram, and Time-Series charts with Base64 image generation and declarative JSON specs.
+
+### 4. PDF Document Intelligence
+* **Document Pipeline:** Extracts text page-by-page using `pypdf`, chunks text while preserving exact page numbers, and indexes chunks into a conversation-scoped SQLite store.
+* **Scanned PDF Detection:** Flags scanned or image-based PDFs without extractable text and reports: *"This PDF appears to be scanned and requires OCR."*
+* **Page-Level Retrieval & Citations:** Responds to both specific page lookups (*"Summarize page 10 of this paper"*) and semantic topic queries with citations like `Source: paper.pdf, Page 10`.
+
+### 5. Mixed Data + Research Workflows
+* InfinityGPT natively supports hybrid workflows:
+  * *"Analyze my sales.xlsx and find research papers explaining the seasonal pattern."*
+  * *"Look at my dataset and tell me whether this trend is consistent with research on consumer demand."*
+* The orchestrator runs data analysis on the active dataset, queries academic literature for theoretical grounding, fuses the evidence, and presents both dataset and scholarly citations.
+
+---
+
+## 3. Directory Layout
 
 ```
-c:\VS_CODE\multi_agent\
+multi_agent/
 ├── app/
+│   ├── agents/
+│   │   ├── intent_detector.py      # Multi-intent routing & coreference resolution
+│   │   ├── llm_client.py           # Gemini LLM client via google-genai SDK
+│   │   ├── orchestrator.py         # Central agent orchestrator & hybrid fusion
+│   │   ├── research_agent.py       # End-to-end autonomous research workflow
+│   │   └── research_planner.py     # Multi-query planning & target budgeting
 │   ├── api/
 │   │   ├── endpoints/
-│   │   │   ├── chat.py             # POST /chat
-│   │   │   ├── chart.py            # POST /chart
-│   │   │   ├── health.py           # GET /health
-│   │   │   ├── search.py           # POST /search
-│   │   │   └── upload.py           # POST /upload
-│   │   └── router.py               # Combined API v1 router
-│   ├── agents/
-│   │   ├── intent_detector.py      # Intent classifier & coreference resolution
-│   │   ├── llm_client.py           # Google Gemini API client
-│   │   └── orchestrator.py         # Full request-agent-tool-response loop
-│   ├── tools/
-│   │   ├── base.py                 # Abstract BaseTool with schema validation
-│   │   ├── aggregate_tool.py       # Group-by summarization & Top-K tool
-│   │   ├── chart_tool.py           # Chart generation tool
-│   │   ├── inspect_schema_tool.py  # Schema profiling & inspection tool
-│   │   ├── query_sql_tool.py       # Read-only SQL executor
-│   │   ├── registry.py             # Central tool registry
-│   │   └── search_tool.py          # Data retrieval tool
-│   ├── services/
-│   │   ├── data_cleaner.py         # Column header & string sanitization
-│   │   ├── file_service.py         # Chunked ingestion & upload management
-│   │   ├── schema_detector.py      # Type inference & cardinality profiler
-│   │   ├── storage_engine.py       # Embedded SQLite queryable persistence
-│   │   └── visualization_service.py# Multi-chart generator (Base64 + JSON)
-│   ├── retrieval/
-│   │   ├── citation.py             # Verifiable source citations
-│   │   ├── ranker.py               # Token scoring & deduplication ranker
-│   │   └── search_engine.py        # Candidate retrieval & filter pipeline
-│   ├── state/
-│   │   ├── session_manager.py      # Thread-safe session tracker
-│   │   └── state_models.py         # Session and conversation models
+│   │   │   ├── chat.py             # POST /api/v1/chat
+│   │   │   ├── chart.py            # POST /api/v1/chart
+│   │   │   ├── conversations.py    # CRUD /api/v1/conversations
+│   │   │   ├── health.py           # GET /api/v1/health
+│   │   │   ├── search.py           # POST /api/v1/search
+│   │   │   └── upload.py           # POST /api/v1/upload (CSV, Excel, PDF)
+│   │   └── router.py               # Combined API router
+│   ├── documents/
+│   │   ├── chunker.py              # Page-aware text chunker
+│   │   ├── document_store.py       # SQLite document chunk storage
+│   │   └── pdf_parser.py           # Text extraction & scanned detection
 │   ├── models/
-│   │   └── domain.py               # Core business & domain models
-│   ├── schemas/
-│   │   ├── chat.py                 # Pydantic chat request/response schemas
-│   │   ├── chart.py                # Pydantic chart request/response schemas
-│   │   ├── common.py               # Error & health schemas
-│   │   ├── search.py               # Pydantic search schemas
-│   │   └── upload.py               # Pydantic upload schemas
-│   ├── utils/
-│   │   ├── config.py               # App configuration & environment settings
-│   │   ├── exceptions.py           # Typed application exception hierarchy
-│   │   └── logger.py               # Structured logger
-│   └── main.py                     # FastAPI application entrypoint
-├── configs/
-│   └── default.yaml                # Default application configuration
+│   │   └── domain.py               # Dataset, document, citation, and source domain models
+│   ├── retrieval/
+│   │   ├── citation.py             # Dataset row-level citations
+│   │   ├── document_retriever.py   # PDF passage retrieval & page citations
+│   │   ├── ranker.py               # Tabular search ranking
+│   │   ├── web_citation.py         # Clickable web citations & sources formatting
+│   │   └── web_ranker.py           # Academic domain authority ranker
+│   ├── schemas/                    # Pydantic request/response schemas
+│   ├── services/
+│   │   ├── data_cleaner.py         # Header cleaning & column sanitization
+│   │   ├── file_service.py         # Upload saving, streaming Excel, and chunked CSV
+│   │   ├── schema_detector.py      # Column profiling & type detection
+│   │   ├── storage_engine.py       # Queryable SQLite table engine
+│   │   ├── visualization_service.py# Multi-chart Matplotlib rendering
+│   │   ├── web_fetch_service.py    # SSRF-guarded HTTP fetch & HTML cleaner
+│   │   └── web_search_service.py   # Tavily / Serper / Brave / ArXiv search providers
+│   ├── state/
+│   │   ├── session_manager.py      # Thread-safe conversation manager with disk persistence
+│   │   └── state_models.py         # ConversationState & SessionState definitions
+│   ├── tools/
+│   │   ├── base.py                 # BaseTool interface with input validation
+│   │   ├── aggregate_tool.py       # aggregate_data tool
+│   │   ├── chart_tool.py           # generate_chart tool
+│   │   ├── document_tool.py        # search_documents tool
+│   │   ├── registry.py             # ToolRegistry with core and extended tools
+│   │   ├── schema_tool.py          # inspect_schema tool
+│   │   ├── search_tool.py          # search_data tool
+│   │   ├── sql_tool.py             # query_sql tool (read-only SQLite)
+│   │   ├── web_fetch_tool.py       # web_fetch tool
+│   │   └── web_search_tool.py      # web_search tool
+│   ├── utils/                      # Settings, logging, and exceptions
+│   └── main.py                     # FastAPI application entrypoint & static mount
+├── frontend/
+│   ├── app.js                      # Reactive ChatGPT-style frontend logic
+│   ├── index.css                   # Rich modern dark theme stylesheet
+│   └── index.html                  # Responsive sidebar & chat workspace HTML
 ├── data/
-│   ├── dbs/                        # SQLite queryable databases
-│   ├── uploads/                    # Raw uploaded files
-│   └── sample_sales.csv            # Included demonstration dataset
-├── tests/
-│   ├── conftest.py                 # Fixtures, test client, and test data
-│   ├── test_agents.py              # Agent intent & coreference tests
-│   ├── test_api_endpoints.py       # Full API integration tests
-│   ├── test_error_handling.py      # Edge case & validation error tests
-│   ├── test_file_service.py        # File validation & chunked ingestion tests
-│   ├── test_retrieval.py           # Ranking, deduplication & citation tests
-│   ├── test_state_manager.py       # Session lifecycle & context cache tests
-│   ├── test_tools.py               # Tool execution & safety tests
-│   └── test_visualization.py       # Chart generation & rendering tests
-├── .env.example
-├── .gitignore
-├── Dockerfile
-├── docker-compose.yml
-├── requirements.txt
-└── README.md
+│   ├── conversations/              # Persistent JSON snapshots of conversations
+│   ├── dbs/                        # SQLite storage databases
+│   ├── sample_sales.csv            # Prepackaged sample dataset
+│   └── uploads/                    # Upload directory
+├── tests/                          # Complete test suite (60 test cases)
+├── .env.example                    # Environment configuration template
+└── requirements.txt                # Python dependencies
 ```
 
 ---
 
-## 4. Installation & Setup
+## 4. Security Architecture
 
-### Prerequisites
-* Python 3.10+ (Tested on Python 3.11)
-* Git
+1. **Untrusted Web & Document Input:**
+   * External text fetched from webpages, papers, and PDFs is treated strictly as untrusted data.
+   * LLM synthesis prompts enclose external content within `<untrusted_evidence>` tags, with system instructions forbidding external text from overriding instructions or safety policies.
+2. **SSRF Defenses:**
+   * `WebFetchService` validates URL schemes (`http`, `https` only).
+   * Blocks connections to loopback (`127.0.0.0/8`, `localhost`, `::1`), private subnets (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`), and link-local cloud metadata services (`169.254.169.254`).
+3. **Read-Only SQL Execution:**
+   * The `query_sql` tool enforces read-only access. Any statement containing `DROP`, `DELETE`, `INSERT`, `UPDATE`, `ALTER`, or `CREATE` is rejected immediately.
+4. **XSS Sanitization:**
+   * All user text and retrieved data in the frontend are HTML-escaped before markdown rendering.
+   * Markdown links are sanitized to accept only valid `http://` and `https://` protocols.
 
-### Step-by-Step Installation
+---
+
+## 5. Environment Configuration
+
+Create a `.env` file in the project root based on `.env.example`:
 
 ```bash
-# 1. Clone or navigate to the workspace
-cd c:\VS_CODE\multi_agent
+# Server Configuration
+HOST=0.0.0.0
+PORT=8000
+DEBUG=False
 
-# 2. Create and activate a virtual environment
+# Storage Configuration
+UPLOAD_DIR=./data/uploads
+DB_DIR=./data/dbs
+CONVERSATIONS_DIR=./data/conversations
+MAX_UPLOAD_SIZE_MB=100
+CHUNK_SIZE_ROWS=10000
+
+# AI / LLM Configuration (Optional: Gemini via google-genai)
+GEMINI_API_KEY=your_gemini_api_key_here
+GEMINI_MODEL=gemini-2.5-flash
+
+# Research Agent & Web Search Configuration
+# Options: tavily | serper | brave | scholarly
+WEB_SEARCH_PROVIDER=tavily
+TAVILY_API_KEY=your_tavily_api_key_here
+SERPER_API_KEY=
+BRAVE_API_KEY=
+MAX_WEB_RESULTS=5
+MAX_RESEARCH_SOURCES=5
+MAX_FETCH_CHARS=50000
+FETCH_TIMEOUT_SECONDS=15
+
+# Document & PDF Processing
+PDF_CHUNK_SIZE_CHARS=1200
+PDF_CHUNK_OVERLAP_CHARS=200
+
+# Retrieval Defaults
+DEFAULT_TOP_K=5
+MAX_SEARCH_RESULTS=50
+```
+
+> **Note:** If no search API key is provided, the platform automatically utilizes its built-in `ScholarlySearchProvider` (live arXiv API + academic index), ensuring valid scholarly papers with real URLs for offline or demo use.
+
+---
+
+## 6. Installation & Running Locally
+
+### Prerequisites
+* Python 3.10+
+* pip
+
+### Installation
+```bash
+# Clone the repository
+git clone https://github.com/Suryakant-gig/multi_agent-demo.git
+cd multi_agent-demo
+
+# Create and activate virtual environment
 python -m venv venv
 # On Windows:
-venv\Scripts\activate
+.\venv\Scripts\activate
 # On Linux/macOS:
 source venv/bin/activate
 
-# 3. Install dependencies
+# Install dependencies
 pip install -r requirements.txt
-
-# 4. Configure environment variables
-cp .env.example .env
 ```
 
----
-
-## 5. Environment Variables
-
-Configure your `.env` file according to your environment:
-
-| Variable | Type | Default | Description |
-|---|---|---|---|
-| `HOST` | string | `0.0.0.0` | Server bind host address |
-| `PORT` | integer | `8000` | Server listen port |
-| `DEBUG` | boolean | `False` | Enable reload / debug logging |
-| `UPLOAD_DIR` | string | `./data/uploads` | Path for raw uploaded files |
-| `DB_DIR` | string | `./data/dbs` | Path for SQLite queryable tables |
-| `MAX_UPLOAD_SIZE_MB` | integer | `100` | Maximum file size in megabytes |
-| `CHUNK_SIZE_ROWS` | integer | `10000` | Batch size for streaming CSV chunks |
-| `GEMINI_API_KEY` | string | `""` | *(Optional)* Google Gemini API Key |
-| `GEMINI_MODEL` | string | `gemini-2.5-flash`| Gemini model for advanced reasoning |
-| `DEFAULT_TOP_K` | integer | `5` | Default number of ranked records |
-
-> **Note on LLM API Key:** The system does **not** hardcode any secrets and is designed to run 100% locally out-of-the-box even without an API key using its deterministic semantic intent router and SQL analytics engine. Providing `GEMINI_API_KEY` activates enhanced conversational polishing and natural language dialogue.
-
----
-
-## 6. Running Locally
-
-Start the application with Uvicorn:
-
+### Running the Application
 ```bash
-python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-* **Swagger / OpenAPI Documentation:** `http://localhost:8000/docs`
-* **ReDoc Documentation:** `http://localhost:8000/redoc`
-* **Health Check:** `http://localhost:8000/api/v1/health`
+Open your browser:
+* **InfinityGPT Workspace:** `http://localhost:8000/workspace/`
+* **API Documentation (Swagger UI):** `http://localhost:8000/docs`
 
 ---
 
-## 7. API Documentation
+## 7. API Endpoints
 
-### A. Health Check: `GET /api/v1/health`
-Checks service readiness and session telemetry.
-* **Status:** `200 OK`
-* **Sample Response:**
-```json
-{
-  "status": "ok",
-  "version": "1.0.0",
-  "active_sessions": 2,
-  "storage_ready": true
-}
-```
-
----
-
-### B. File Upload: `POST /api/v1/upload`
-Uploads CSV or Excel files (`.xlsx`, `.xls`), performs validation, creates SQLite indexed tables, profiles columns, and registers metadata.
-* **Content-Type:** `multipart/form-data`
-* **Parameters:**
-  * `file`: Binary file (required)
-  * `session_id`: String (optional; created if omitted)
-* **Status:** `201 Created`
-* **Sample Response:**
-```json
-{
-  "success": true,
-  "session_id": "sess-a1b2c3",
-  "file_id": "f8a910",
-  "file_name": "sales.csv",
-  "file_size_bytes": 102400,
-  "row_count": 1500,
-  "column_count": 5,
-  "columns": [
-    {
-      "name": "product",
-      "data_type": "string",
-      "null_count": 0,
-      "unique_count": 15,
-      "is_numeric": false,
-      "is_temporal": false,
-      "is_categorical": true,
-      "sample_values": ["MacBook Pro 16", "Dell XPS 15"]
-    },
-    {
-      "name": "revenue",
-      "data_type": "float",
-      "null_count": 0,
-      "unique_count": 250,
-      "is_numeric": true,
-      "is_temporal": false,
-      "is_categorical": false,
-      "sample_values": [2499.0, 1899.5]
-    }
-  ],
-  "message": "File successfully parsed and indexed."
-}
-```
+| Method | Endpoint | Description |
+|---|---|---|
+| `POST` | `/api/v1/chat` | Main conversational endpoint (supports data, research, documents, and hybrid workflows) |
+| `POST` | `/api/v1/upload` | Ingests CSV, Excel (`.xlsx`, `.xls`), or PDF files |
+| `POST` | `/api/v1/upload-sample` | Loads prepackaged `sample_sales.csv` for immediate testing |
+| `GET` | `/api/v1/conversations` | Lists all saved conversations with summary metadata |
+| `POST` | `/api/v1/conversations` | Creates a new isolated conversation |
+| `GET` | `/api/v1/conversations/{id}` | Retrieves full conversation details, messages, and active files |
+| `PATCH` | `/api/v1/conversations/{id}` | Renames a conversation title |
+| `DELETE` | `/api/v1/conversations/{id}` | Deletes a conversation and its persisted data |
+| `POST` | `/api/v1/search` | Direct ranked row retrieval with source citations |
+| `POST` | `/api/v1/chart` | Direct chart generation endpoint |
+| `GET` | `/api/v1/health` | Health check and version status |
 
 ---
 
-### C. Chat & Conversational Analysis: `POST /api/v1/chat`
-Answers natural language queries, performs aggregations, searches records, and generates visualizations while tracking conversation state.
-* **Content-Type:** `application/json`
-* **Request Body:**
-```json
-{
-  "query": "Show me the top 5 products by revenue",
-  "session_id": "sess-a1b2c3"
-}
-```
-* **Status:** `200 OK`
-* **Sample Response:**
-```json
-{
-  "session_id": "sess-a1b2c3",
-  "query": "Show me the top 5 products by revenue",
-  "intent": "data_analysis",
-  "answer": "Here are the Top 5 product by SUM(revenue):\n\n1. **MacBook Pro 16**: 2,499.00 (1 records)\n2. **MacBook Pro 14**: 1,999.00 (1 records)\n3. **Dell XPS 15**: 1,899.50 (1 records)\n4. **MacBook Air 15**: 1,299.00 (1 records)\n5. **LG UltraFine 32**: 1,299.00 (1 records)",
-  "tool_calls": [
-    {
-      "tool_name": "aggregate_data",
-      "parameters": {
-        "group_by_column": "product",
-        "metric_column": "revenue",
-        "aggregation": "SUM",
-        "top_k": 5,
-        "ascending": false
-      },
-      "execution_time_ms": 1.25,
-      "success": true,
-      "error_message": null
-    }
-  ],
-  "citations": [
-    {
-      "file_id": "f8a910",
-      "file_name": "sales.csv",
-      "row_index": null,
-      "column_names": ["product", "revenue"],
-      "snippet": "summary: Top-5 product by SUM(revenue)",
-      "source_description": "Source: sales.csv (Aggregated Summary over product, revenue)"
-    }
-  ],
-  "chart": null,
-  "duration_ms": 4.12
-}
-```
+## 8. Example Queries
 
-#### Coreference Follow-Up Turn:
-```json
-{
-  "query": "Make a chart for that",
-  "session_id": "sess-a1b2c3"
-}
-```
-*Response generates the bar chart for the preceding Top-5 product aggregation automatically without re-prompting!*
+* **Data Analysis:**
+  * *"Show me the top 5 products by revenue."*
+  * *"What is the total sales amount in the Electronics category?"*
+* **Coreference Visualizations:**
+  * *"Make a chart for that."*
+  * *"Generate a pie chart of revenue by category."*
+* **Academic Literature & Research:**
+  * *"Find 5 research papers about hybrid RAG retrieval."*
+  * *"Compare the latest papers on dense versus sparse retrieval."*
+  * *"What are the recent developments in agentic RAG?"*
+  * *"Research the latest methods for entity resolution."*
+* **PDF Document Intelligence:**
+  * *"Summarize page 10 of this uploaded paper."*
+  * *"What is the benchmark methodology described in Section 3?"*
+* **Hybrid Data + Research:**
+  * *"Analyze sales.xlsx and find research papers explaining the seasonal trend."*
+  * *"Look at my dataset and tell me whether this pattern is consistent with research on consumer demand."*
 
 ---
 
-### D. Direct Search: `POST /api/v1/search`
-Retrieves Top-K ranked records matching query criteria with citations.
-* **Content-Type:** `application/json`
-* **Request Body:**
-```json
-{
-  "query": "Laptop",
-  "session_id": "sess-a1b2c3",
-  "top_k": 5
-}
-```
-* **Status:** `200 OK`
-* **Sample Response:**
-```json
-{
-  "session_id": "sess-a1b2c3",
-  "query": "Laptop",
-  "count": 3,
-  "top_k": 5,
-  "results": [
-    {
-      "row_index": 1,
-      "score": 4.0,
-      "data": {
-        "transaction_id": "TX-1001",
-        "product": "MacBook Pro 16",
-        "category": "Laptops",
-        "revenue": 2499.0,
-        "quantity": 1
-      },
-      "citation": {
-        "file_id": "f8a910",
-        "file_name": "sales.csv",
-        "row_index": 1,
-        "column_names": ["category"],
-        "snippet": "transaction_id: TX-1001 | product: MacBook Pro 16 | category: Laptops",
-        "source_description": "Source: sales.csv (Row 1)"
-      }
-    }
-  ]
-}
-```
+## 9. Running Tests
 
----
-
-### E. Direct Visualization: `POST /api/v1/chart`
-Generates charts on demand.
-* **Content-Type:** `application/json`
-* **Request Body:**
-```json
-{
-  "session_id": "sess-a1b2c3",
-  "chart_type": "bar",
-  "x_column": "category",
-  "y_column": "revenue",
-  "aggregation": "SUM",
-  "title": "Revenue by Category",
-  "top_k": 5
-}
-```
-* **Status:** `200 OK`
-* **Sample Response:**
-```json
-{
-  "chart_type": "bar",
-  "title": "Revenue by Category",
-  "x_column": "category",
-  "y_column": "revenue",
-  "aggregation": "SUM",
-  "image_base64": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUg...",
-  "spec_json": {
-    "title": "Revenue by Category",
-    "type": "bar",
-    "encoding": {
-      "x": {"field": "category", "type": "nominal"},
-      "y": {"field": "revenue", "type": "quantitative"}
-    },
-    "data": [
-      {"category": "Laptops", "revenue": 7696.5},
-      {"category": "Smartphones", "revenue": 2997.0}
-    ]
-  },
-  "data_points": [
-    {"category": "Laptops", "revenue": 7696.5},
-    {"category": "Smartphones", "revenue": 2997.0}
-  ],
-  "metadata": {
-    "dataset_id": "f8a910",
-    "points_rendered": 2
-  }
-}
-```
-
----
-
-## 8. Large File Handling Strategy
-
-To prevent memory overflow and latency spikes when processing multi-megabyte and multi-gigabyte datasets:
-1. **Streamed Disk Ingestion:** Uploaded files stream to disk in 1MB chunks without accumulating in Python memory.
-2. **Chunked Reader Pipeline:** CSVs are parsed in batches (`CHUNK_SIZE_ROWS = 10,000`) using `pandas.read_csv(chunksize=...)`.
-3. **Queryable Embedded SQLite Tables:** Chunks are written directly into an embedded SQLite table (`data_{file_id}`).
-4. **Indexed Columns:** Automatic B-tree indexes are built on the first 5 columns and text categorical attributes.
-5. **Database-Level Aggregation:** Calculations (e.g. `SUM`, `AVG`, `COUNT`, `GROUP BY`, `ORDER BY`) execute in SQL, reading only indexed pages rather than instantiating dataframes for millions of rows.
-6. **Limit & Offset Pagination:** Record queries and sample views employ strict pagination to constrain payload sizes.
-
----
-
-## 9. Tool Suite Specifications
-
-All tools inherit from `BaseTool` and enforce strict Pydantic/JSON schemas:
-
-| Tool Name | Purpose | Parameters | Output Schema |
-|---|---|---|---|
-| `search_data` | Retrieval of matching records | `query` (str, req), `filters` (dict, opt), `top_k` (int, opt) | `results` (array), `count` (int), citations |
-| `aggregate_data` | Group-by metric calculations & Top-K | `group_by_column` (str, req), `metric_column` (str, req), `aggregation` (str, opt), `top_k` (int, opt), `ascending` (bool, opt) | `results` (array), `citations` (array) |
-| `generate_chart` | Data visualization generation | `chart_type` (str, req), `x_column` (str, req), `y_column` (str, opt), `aggregation` (str, opt), `title` (str, opt), `top_k` (int, opt) | `image_base64` (str), `spec_json` (dict), `data_points` (array) |
-| `inspect_schema` | Dataset structure & preview | `file_id` (str, opt), `sample_limit` (int, opt) | `columns` (array), `row_count` (int), `sample_rows` (array) |
-| `query_sql` | Read-only SQL query execution | `sql_query` (str, req), `file_id` (str, opt) | `results` (array), `row_count` (int), citations |
-
----
-
-## 10. Visualization Specifications
-
-Supported chart formats:
-* **Bar Chart:** Categorical comparisons with custom color schemes and numeric y-axes.
-* **Line Chart:** Trends and sequential continuous metrics.
-* **Pie Chart:** Percentage share across top categories.
-* **Scatter Plot:** Correlation between two continuous numerical variables.
-* **Histogram:** Distribution frequency of numerical columns across 15 bins.
-* **Time-Series Chart:** Date-sorted temporal aggregations.
-
-Dual Render Output:
-* `image_base64`: Direct PNG data URI ready for `<img src="..." />`.
-* `spec_json`: Standard declarative JSON format ready for rendering with Chart.js, Recharts, or Vega-Lite.
-
----
-
-## 11. Testing
-
-The platform includes a comprehensive automated test suite with **37 test cases** covering file processing, validations, state management, search, tools, agent routing, coreference resolution, visualizations, and API error codes.
-
-Run tests using pytest:
+The test suite contains 60 comprehensive unit and integration tests:
 
 ```bash
 pytest -v
 ```
 
-Output:
-```
-tests/test_agents.py::test_agent_schema_intent PASSED
-tests/test_agents.py::test_agent_top_5_analysis PASSED
-tests/test_agents.py::test_agent_coreference_chart_for_that PASSED
-tests/test_agents.py::test_agent_search_query PASSED
-tests/test_api_endpoints.py::test_api_health PASSED
-tests/test_api_endpoints.py::test_api_upload_csv PASSED
-tests/test_api_endpoints.py::test_api_upload_excel PASSED
-tests/test_api_endpoints.py::test_api_search PASSED
-tests/test_api_endpoints.py::test_api_chart PASSED
-tests/test_api_endpoints.py::test_api_chat_flow PASSED
-tests/test_error_handling.py::test_upload_invalid_extension PASSED
-tests/test_error_handling.py::test_upload_empty_file PASSED
-tests/test_error_handling.py::test_search_non_existent_session PASSED
-tests/test_error_handling.py::test_chart_invalid_column PASSED
-tests/test_error_handling.py::test_chat_empty_query_validation PASSED
-tests/test_file_service.py::test_data_cleaner PASSED
-tests/test_file_service.py::test_file_validation_unsupported_extension PASSED
-tests/test_file_service.py::test_file_validation_empty_file PASSED
-tests/test_file_service.py::test_file_validation_too_large PASSED
-tests/test_file_service.py::test_csv_processing PASSED
-tests/test_file_service.py::test_excel_processing PASSED
-tests/test_retrieval.py::test_relevance_ranker_scoring PASSED
-tests/test_retrieval.py::test_relevance_ranker_deduplication PASSED
-tests/test_retrieval.py::test_search_engine_top_k PASSED
-tests/test_state_manager.py::test_session_lifecycle PASSED
-tests/test_state_manager.py::test_session_file_tracking PASSED
-tests/test_state_manager.py::test_session_context_update PASSED
-tests/test_tools.py::test_tool_registry PASSED
-tests/test_tools.py::test_search_data_tool PASSED
-tests/test_tools.py::test_aggregate_data_tool PASSED
-tests/test_tools.py::test_inspect_schema_tool PASSED
-tests/test_tools.py::test_sql_tool_safety PASSED
-tests/test_visualization.py::test_bar_chart_generation PASSED
-tests/test_visualization.py::test_pie_chart_generation PASSED
-tests/test_visualization.py::test_scatter_chart_generation PASSED
-tests/test_visualization.py::test_histogram_generation PASSED
-tests/test_visualization.py::test_invalid_column_chart PASSED
-
-====================== 37 passed in 5.67s =======================
-```
-
----
-
-## 12. Docker Usage
-
-### Build and Run with Docker:
-
-```bash
-# Build Docker image
-docker build -t data-agent-platform .
-
-# Run container
-docker run -p 8000:8000 -v $(pwd)/data:/app/data data-agent-platform
-```
-
-### Run with Docker Compose:
-
-```bash
-docker-compose up --build
-```
-
-Access `http://localhost:8000/docs` to test endpoints.
-
----
-
-## 13. Known Limitations & Future Improvements
-
-### Known Limitations:
-1. **Multi-Sheet Excel Files:** The current ingestion defaults to the first active sheet in an Excel workbook.
-2. **In-Memory Session Store:** Active sessions reside in memory; for high-availability distributed deployments across multiple containers, a Redis or PostgreSQL session backend is recommended.
-3. **Complex Nested Expressions in SQL Tool:** Only single read-only `SELECT`/`WITH` queries are permitted for safety.
-
-### Future Improvements:
-1. **Vector Embeddings & Hybrid Search:** Integrate dense vector embeddings (e.g. ChromaDB or pgvector) alongside the current lexical BM25 ranker for hybrid semantic search.
-2. **Multi-File Joins:** Enable automated join detection between multiple uploaded datasets within a single session.
-3. **Persistent Session Redis Adapter:** Provide a drop-in Redis adapter for distributed session scaling.
+All 60 tests validate conversation isolation, persistence, research intent routing, web search top-k enforcement, web fetch SSRF protections, PDF text extraction, scanned PDF detection, mixed data+web orchestration, and read-only SQL safety.

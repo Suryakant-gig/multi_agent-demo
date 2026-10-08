@@ -8,36 +8,69 @@ from app.utils.logger import logger
 class IntentDetector:
     """
     Understands user intent and resolves parameters using contextual semantics,
-    dataset schema analysis, and cross-turn history (coreference resolution).
+    dataset schema analysis, cross-turn history (coreference resolution),
+    document retrieval detection, and research intent routing.
     """
 
     CHART_KEYWORDS = {"chart", "plot", "graph", "visualize", "visualization", "histogram", "pie", "bar", "scatter"}
     ANALYSIS_KEYWORDS = {"top", "bottom", "highest", "lowest", "sum", "total", "average", "avg", "mean", "count", "maximum", "max", "minimum", "min", "aggregate"}
-    SCHEMA_KEYWORDS = {"schema", "columns", "structure", "overview", "preview", "fields", "sample", "dataset"}
+    SCHEMA_KEYWORDS = {"what columns", "show columns", "list columns", "schema", "dataset structure", "data preview", "overview"}
+    RESEARCH_KEYWORDS = {"research paper", "research papers", "papers", "paper", "arxiv", "survey", "literature", "recent developments in", "latest developments in", "latest research", "recent research", "scientific study"}
+    WEB_SEARCH_KEYWORDS = {"search the internet", "search the web", "search online", "official docs", "official documentation", "google search"}
 
     @classmethod
     def detect_intent(cls, query: str, session: SessionState) -> IntentType:
         q_lower = query.lower()
 
-        # Check for coreference chart request (e.g. "make a chart for that", "visualize this")
+        has_active_dataset = bool(session.active_file_id and session.active_file_id in session.files)
+        has_active_documents = bool(session.documents)
+
+        # 1. Check for Hybrid (Mixed Data + Research)
+        has_data_mention = any(w in q_lower for w in ["dataset", "sales", "data", "excel", "csv", "table", "my trend", "my pattern", "uploaded data"])
+        has_research_mention = any(w in q_lower for w in ["research", "paper", "papers", "literature", "consumer demand", "explain using research", "consistent with research"])
+        if (has_data_mention or has_active_dataset) and has_research_mention and any(w in q_lower for w in ["explain", "consistent", "theory", "literature", "why", "pattern", "trend"]):
+            return IntentType.HYBRID
+
+        # 2. Check for PDF Document Search
+        if (has_active_documents or "pdf" in q_lower or re.search(r"\bpage\s+\d+\b", q_lower)) and not has_data_mention:
+            if re.search(r"\bpage\s+\d+\b", q_lower) or any(w in q_lower for w in ["in this paper", "in the pdf", "in the document", "methodology", "section", "abstract"]):
+                return IntentType.DOCUMENT_SEARCH
+
+        # 3. Check for Research Agent Request
+        if any(w in q_lower for w in cls.RESEARCH_KEYWORDS) or re.search(r"\b\d+\s+papers\b", q_lower) or q_lower.startswith("research "):
+            # Ensure it's not a dataset column search (e.g. if dataset has a column called "paper")
+            return IntentType.RESEARCH
+
+        # 4. Check for Web Search
+        if any(w in q_lower for w in cls.WEB_SEARCH_KEYWORDS) or q_lower.startswith("search for ") or "what happened recently with" in q_lower:
+            return IntentType.WEB_SEARCH
+
+        # 5. Coreference chart request (e.g. "make a chart for that", "visualize this")
         if any(w in q_lower for w in cls.CHART_KEYWORDS):
             return IntentType.VISUALIZATION
 
-        # Check for schema inspection
-        if any(w in q_lower for w in ["what columns", "show columns", "list columns", "schema", "dataset structure", "data preview"]):
+        # 6. Schema inspection
+        if any(w in q_lower for w in cls.SCHEMA_KEYWORDS):
             return IntentType.SCHEMA_INSPECTION
 
-        # Check for aggregation/data analysis
+        # 7. Aggregation / data analysis (Top-K, SUM, AVG)
         if any(w in q_lower for w in cls.ANALYSIS_KEYWORDS) or re.search(r"top\s+\d+", q_lower):
             return IntentType.DATA_ANALYSIS
 
-        # Check for search/retrieval
+        # 8. Search / retrieval in dataset
         if any(w in q_lower for w in ["find", "search", "show me", "get", "where", "filter", "which"]):
-            return IntentType.SEARCH_RETRIEVAL
+            if has_active_dataset:
+                return IntentType.SEARCH_RETRIEVAL
+            if has_active_documents:
+                return IntentType.DOCUMENT_SEARCH
+            return IntentType.WEB_SEARCH
 
-        # Default fallback
-        if session.active_file_id:
+        # 9. Fallback based on session state
+        if has_active_dataset:
             return IntentType.SEARCH_RETRIEVAL
+        if has_active_documents:
+            return IntentType.DOCUMENT_SEARCH
+
         return IntentType.DIRECT_ANSWER
 
     @staticmethod
@@ -46,7 +79,6 @@ class IntentDetector:
         t = text.lower()
         if c in t:
             return True
-        # Handle plurals like category -> categories, product -> products
         if c.endswith("y") and (c[:-1] + "ies") in t:
             return True
         if (c + "s") in t or (c + "es") in t:
@@ -65,8 +97,29 @@ class IntentDetector:
     ) -> Tuple[Optional[str], Dict[str, Any]]:
         q_lower = query.lower()
 
-        if intent == IntentType.VISUALIZATION:
-            # 1. Coreference resolution: Did user say "for that" / "of that"?
+        # A. Research Intent -> Dedicated Research Agent workflow
+        if intent == IntentType.RESEARCH:
+            # Parse desired number of papers if specified
+            top_k = 5
+            count_match = re.search(r"\b(\d+)\s*papers\b", q_lower)
+            if count_match:
+                top_k = int(count_match.group(1))
+            return "research_agent", {"query": query, "max_sources": top_k}
+
+        # B. Web Search Intent
+        elif intent == IntentType.WEB_SEARCH:
+            return "web_search", {"query": query, "top_k": 5}
+
+        # C. Document Search Intent (PDF)
+        elif intent == IntentType.DOCUMENT_SEARCH:
+            return "search_documents", {"query": query, "top_k": 4}
+
+        # D. Hybrid Intent (Data + Research)
+        elif intent == IntentType.HYBRID:
+            return "hybrid_orchestration", {"query": query}
+
+        # E. Visualization
+        elif intent == IntentType.VISUALIZATION:
             last_tool = session.last_tool_call
             params: Dict[str, Any] = {}
 
@@ -82,7 +135,9 @@ class IntentDetector:
                 chart_type = "histogram"
 
             # Check if referring to last aggregation result
-            if last_tool and last_tool.tool_name == "aggregate_data" and ("that" in q_lower or "this" in q_lower or "it" in q_lower or "result" in q_lower or "previous" in q_lower or len(q_lower.split()) <= 6):
+            if last_tool and last_tool.tool_name == "aggregate_data" and (
+                "that" in q_lower or "this" in q_lower or "it" in q_lower or "result" in q_lower or "previous" in q_lower or len(q_lower.split()) <= 6
+            ):
                 prev_params = last_tool.parameters
                 params = {
                     "chart_type": chart_type,
@@ -94,14 +149,13 @@ class IntentDetector:
                 }
                 return "generate_chart", params
 
-            # Otherwise infer columns from dataset
+            # Inferred columns from dataset
             if dataset:
                 cols = dataset.columns
                 cat_cols = [c.name for c in cols if c.is_categorical or c.data_type == "string"]
                 num_cols = [c.name for c in cols if c.is_numeric]
                 time_cols = [c.name for c in cols if c.is_temporal]
 
-                # Find mentions in query
                 x_col = None
                 y_col = None
                 for c in cols:
@@ -124,14 +178,13 @@ class IntentDetector:
                 }
                 return "generate_chart", params
 
+        # F. Data Analysis (Aggregation)
         elif intent == IntentType.DATA_ANALYSIS:
-            # Extract top_k
             top_k = 5
             match_top = re.search(r"top\s+(\d+)", q_lower)
             if match_top:
                 top_k = int(match_top.group(1))
 
-            # Aggregation func
             agg = "SUM"
             if "average" in q_lower or "avg" in q_lower or "mean" in q_lower:
                 agg = "AVG"
@@ -173,12 +226,13 @@ class IntentDetector:
                         "ascending": ascending
                     }
 
-            # Fallback to search
             return "search_data", {"query": query, "top_k": top_k}
 
+        # G. Schema Inspection
         elif intent == IntentType.SCHEMA_INSPECTION:
             return "inspect_schema", {"sample_limit": 5}
 
+        # H. Search Retrieval (tabular)
         elif intent == IntentType.SEARCH_RETRIEVAL:
             top_k = 5
             match_top = re.search(r"top\s+(\d+)", q_lower)

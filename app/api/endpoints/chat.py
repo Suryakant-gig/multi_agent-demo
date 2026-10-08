@@ -24,7 +24,8 @@ router = APIRouter()
 )
 def chat_with_data(request: ChatRequest):
     try:
-        session = session_manager.get_or_create_session(request.session_id)
+        target_id = request.conversation_id or request.session_id
+        session = session_manager.get_or_create_session(target_id)
         if request.file_id:
             # Validate file exists
             session_manager.get_active_file(session.session_id, request.file_id)
@@ -33,6 +34,7 @@ def chat_with_data(request: ChatRequest):
             session_id=session.session_id,
             query=request.query
         )
+        response_dict["conversation_id"] = session.conversation_id
 
         return ChatResponse(**response_dict)
 

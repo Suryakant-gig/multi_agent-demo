@@ -12,5 +12,6 @@ class ErrorResponse(BaseModel):
 class HealthResponse(BaseModel):
     status: str = "ok"
     version: str
-    active_sessions: int
+    database: str = "connected"
+    active_sessions: int = 0
     storage_ready: bool = True

@@ -31,8 +31,11 @@ data/uploads/*
 !data/uploads/.gitkeep
 data/dbs/*
 !data/dbs/.gitkeep
+data/conversations/*
+!data/conversations/.gitkeep
 *.db
 *.sqlite3
+
 
 # Environment
 .env

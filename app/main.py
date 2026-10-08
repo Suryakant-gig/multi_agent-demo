@@ -1,40 +1,58 @@
+import os
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi.exceptions import RequestValidationError
+from starlette.exceptions import HTTPException as StarletteHTTPException
+
 from app.api.router import api_router
 from app.utils.config import settings
 from app.utils.logger import logger
 from app.utils.exceptions import AppException
+from contextlib import asynccontextmanager
+from app.storage.database import init_db
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    try:
+        init_db()
+    except Exception as e:
+        logger.warning(f"Database initialization deferred on startup: {e}")
+    yield
 
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
+    lifespan=lifespan,
     description="""
-    Production-ready AI-powered Excel & CSV Data Analysis, Search, and Visualization Agent Platform.
+    InfinityGPT — Unified AI-powered Tabular Data Analysis, Research Agent, and Document Intelligence Platform.
     
     ### Capabilities:
-    * **Ingestion:** Streamed/chunked Excel and CSV ingestion into indexed queryable SQLite storage.
-    * **Agent Intelligence:** Dual-mode agent orchestrator (Gemini LLM reasoning + deterministic semantic pipeline fallback).
-    * **Data Retrieval:** Ranked Top-K candidate search with verifiable row-level citations.
-    * **Analytics & Tools:** Categorical group aggregations, schema profiling, and secure read-only SQL queries.
-    * **Visualization:** Multi-chart generation (Bar, Line, Pie, Scatter, Histogram, Time-Series) with Base64 images and declarative JSON specs.
-    * **Conversational Context:** Multi-turn session tracking with automatic coreference resolution ("Make a chart for that").
+    * **Single-Origin Frontend:** InfinityGPT ChatGPT-style UI served directly at http://localhost:8000/
+    * **PostgreSQL Central Persistence:** Conversations, messages, file metadata, document chunks, research bibliographies, citations, and tool audits.
+    * **Tabular Ingestion & Analytics:** Streamed CSV/Excel processing, categorical group aggregations, schema profiling, and secure SQL queries.
+    * **Research Agent:** Query planning, multi-query web search, candidate ranking, fetch, evidence synthesis, and citations.
+    * **Document Intelligence:** Page-level PDF extraction, semantic chunking, and verifiable page citations.
+    * **Visualization:** Declarative charts with Base64 previews and dynamic multi-turn context tracking.
     """,
     docs_url="/docs",
     redoc_url="/redoc"
 )
 
-# CORS configuration
+# Restrict CORS to known local development origins
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
+        "http://localhost:5500",
+        "http://127.0.0.1:5500",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-from starlette.exceptions import HTTPException as StarletteHTTPException
 
 # Exception handlers
 @app.exception_handler(AppException)
@@ -53,6 +71,7 @@ async def app_exception_handler(request: Request, exc: AppException):
 
 @app.exception_handler(StarletteHTTPException)
 async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+    # Only return JSON error if requesting API or not an asset
     logger.warning(f"HTTP exception on {request.url.path}: {exc.detail}")
     return JSONResponse(
         status_code=exc.status_code,
@@ -91,18 +110,16 @@ async def generic_exception_handler(request: Request, exc: Exception):
         }
     )
 
-# Include Router
+# Include API Router BEFORE static files mount
 app.include_router(api_router)
 
-# Root endpoint
-@app.get("/", tags=["Root"])
-def root():
-    return {
-        "message": f"Welcome to {settings.APP_NAME}",
-        "version": settings.APP_VERSION,
-        "docs": "/docs",
-        "health": "/api/v1/health"
-    }
+# Mount Frontend at root '/' to serve index.html, app.js, index.css from single origin
+if os.path.exists("frontend"):
+    @app.get("/", include_in_schema=False)
+    async def serve_index():
+        return FileResponse("frontend/index.html")
+
+    app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend")
 
 
 if __name__ == "__main__":

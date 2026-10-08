@@ -19,6 +19,10 @@ class IntentType(str, Enum):
     VISUALIZATION = "visualization"
     SCHEMA_INSPECTION = "schema_inspection"
     DIRECT_ANSWER = "direct_answer"
+    RESEARCH = "research"
+    WEB_SEARCH = "web_search"
+    DOCUMENT_SEARCH = "document_search"
+    HYBRID = "hybrid"
 
 
 class ColumnMetadata(BaseModel):
@@ -43,13 +47,48 @@ class DatasetMetadata(BaseModel):
     uploaded_at: datetime = Field(default_factory=datetime.utcnow)
 
 
-class CitationItem(BaseModel):
-    file_id: str
+class DocumentChunk(BaseModel):
+    chunk_id: str
+    document_id: str
     file_name: str
+    page_number: int
+    text: str
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+
+class DocumentMetadata(BaseModel):
+    document_id: str
+    file_name: str
+    file_size_bytes: int
+    page_count: int
+    chunk_count: int
+    is_scanned: bool = False
+    uploaded_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class SourceItem(BaseModel):
+    title: str
+    url: str
+    domain: str
+    snippet: str = ""
+    published_at: Optional[str] = None
+    source_type: str = "website"  # "paper" | "documentation" | "article" | "website"
+    relevance_score: float = 0.0
+
+
+class CitationItem(BaseModel):
+    file_id: str = ""
+    file_name: str = ""
     row_index: Optional[int] = None
     column_names: List[str] = Field(default_factory=list)
     snippet: Optional[str] = None
     source_description: str = ""
+    citation_type: str = "dataset"  # "dataset" | "pdf" | "web"
+    page_number: Optional[int] = None
+    url: Optional[str] = None
+    title: Optional[str] = None
+    domain: Optional[str] = None
+    published_at: Optional[str] = None
 
 
 class SearchResultItem(BaseModel):
@@ -87,4 +126,6 @@ class MessageRecord(BaseModel):
     intent: Optional[IntentType] = None
     tool_calls: List[ToolCallRecord] = Field(default_factory=list)
     citations: List[CitationItem] = Field(default_factory=list)
+    sources: List[SourceItem] = Field(default_factory=list)
     chart: Optional[ChartPayload] = None
+
