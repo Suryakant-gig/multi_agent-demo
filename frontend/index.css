@@ -924,19 +924,25 @@ body {
   color: #f8fafc;
 }
 
-/* Tables */
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  margin: 10px 0;
+}
+
 .markdown-table {
   width: 100%;
   border-collapse: collapse;
-  margin: 12px 0;
   font-size: 0.85rem;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
   overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
 
 .markdown-table th, .markdown-table td {
-  padding: 8px 12px;
+  padding: 10px 14px;
   border: 1px solid var(--border-subtle);
   text-align: left;
 }
@@ -945,10 +951,75 @@ body {
   background: #191924;
   color: #fff;
   font-weight: 600;
+  letter-spacing: 0.2px;
 }
 
 .markdown-table tr:nth-child(even) {
-  background: rgba(255, 255, 255, 0.02);
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.markdown-table tr:hover {
+  background: rgba(99, 102, 241, 0.06);
+}
+
+/* Structured Table Card */
+.structured-table-card {
+  margin: 14px 0;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+}
+
+.table-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.table-card-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.table-count-badge {
+  font-size: 0.72rem;
+  padding: 2px 8px;
+  background: rgba(99, 102, 241, 0.15);
+  color: #818cf8;
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  border-radius: 12px;
+  font-weight: 500;
+}
+
+.row-index-cell {
+  color: var(--text-dim);
+  font-weight: 600;
+  width: 40px;
+  text-align: center !important;
+}
+
+/* Task Plan Badge */
+.task-plan-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+  padding: 4px 10px;
+  background: rgba(14, 165, 233, 0.1);
+  border: 1px solid rgba(14, 165, 233, 0.25);
+  border-radius: 14px;
+  font-size: 0.75rem;
+  color: #38bdf8;
+  font-weight: 500;
 }
 
 /* ==========================================================================

@@ -518,6 +518,15 @@ function appendMessageElement(role, data) {
     bubble.textContent = data.content;
     wrapper.appendChild(bubble);
   } else {
+    // 0. Task Plan Badge
+    if (data.task_plan && data.task_plan.task_type && data.task_plan.task_type !== "direct_answer") {
+      const planBadge = document.createElement("div");
+      planBadge.className = "task-plan-badge";
+      const opText = data.task_plan.operation ? ` &bull; ${escapeHtml(data.task_plan.operation)}` : "";
+      planBadge.innerHTML = `<span>🎯</span> <span>Plan: <strong>${escapeHtml(data.task_plan.task_type)}</strong>${opText}</span>`;
+      bubble.appendChild(planBadge);
+    }
+
     // 1. Tool execution indicators (collapsible accordion)
     if (data.tool_calls && data.tool_calls.length > 0) {
       const toolCard = createToolActivityCard(data.tool_calls);
@@ -529,6 +538,12 @@ function appendMessageElement(role, data) {
     textDiv.className = "markdown-body";
     textDiv.innerHTML = formatMarkdown(data.answer || data.content || "");
     bubble.appendChild(textDiv);
+
+    // 2b. Structured Table Card (if returned as structured JSON and not already rendered in markdown)
+    if (data.table && data.table.columns && data.table.rows && !textDiv.querySelector("table")) {
+      const tableCard = createStructuredTableCard(data.table);
+      bubble.appendChild(tableCard);
+    }
 
     // 3. Render Chart if present
     if (data.chart && data.chart.image_base64) {
@@ -841,19 +856,82 @@ function renderHtmlTable(rows) {
   const parseCells = (row) => row.split("|").slice(1, -1).map(c => c.trim());
   const headerCells = parseCells(rows[0]);
 
-  let html = `<table class="markdown-table"><thead><tr>`;
-  headerCells.forEach(h => html += `<th>${h}</th>`);
+  let html = `<div class="table-responsive"><table class="markdown-table"><thead><tr>`;
+  headerCells.forEach(h => html += `<th>${escapeHtml(h)}</th>`);
   html += `</tr></thead><tbody>`;
 
   for (let r = 2; r < rows.length; r++) {
     const cells = parseCells(rows[r]);
     html += `<tr>`;
-    cells.forEach(c => html += `<td>${c}</td>`);
+    cells.forEach(c => html += `<td>${escapeHtml(c)}</td>`);
     html += `</tr>`;
   }
 
-  html += `</tbody></table>`;
+  html += `</tbody></table></div>`;
   return html;
+}
+
+function createStructuredTableCard(tableData) {
+  const card = document.createElement("div");
+  card.className = "structured-table-card";
+
+  const sourceName = tableData.source ? (tableData.source.filename || tableData.source.type || "Dataset") : "Structured Table";
+  const rowCount = tableData.row_count || (tableData.rows ? tableData.rows.length : 0);
+
+  const header = document.createElement("div");
+  header.className = "table-card-header";
+  header.innerHTML = `
+    <div class="table-card-title">
+      <span class="table-icon">📊</span>
+      <span>${escapeHtml(sourceName)}</span>
+      <span class="table-count-badge">${rowCount} row${rowCount === 1 ? '' : 's'}</span>
+    </div>
+  `;
+  card.appendChild(header);
+
+  const tableContainer = document.createElement("div");
+  tableContainer.className = "table-responsive";
+
+  const table = document.createElement("table");
+  table.className = "markdown-table structured-data-table";
+
+  const thead = document.createElement("thead");
+  const headerTr = document.createElement("tr");
+
+  const thIdx = document.createElement("th");
+  thIdx.textContent = "#";
+  thIdx.style.width = "40px";
+  headerTr.appendChild(thIdx);
+
+  (tableData.columns || []).forEach(col => {
+    const th = document.createElement("th");
+    th.textContent = col;
+    headerTr.appendChild(th);
+  });
+  thead.appendChild(headerTr);
+  table.appendChild(thead);
+
+  const tbody = document.createElement("tbody");
+  const offset = tableData.offset || 0;
+  (tableData.rows || []).forEach((rowVals, idx) => {
+    const tr = document.createElement("tr");
+    const tdIdx = document.createElement("td");
+    tdIdx.textContent = String(offset + idx + 1);
+    tdIdx.className = "row-index-cell";
+    tr.appendChild(tdIdx);
+
+    rowVals.forEach(val => {
+      const td = document.createElement("td");
+      td.textContent = val !== null && val !== undefined ? String(val) : "";
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+  tableContainer.appendChild(table);
+  card.appendChild(tableContainer);
+
+  return card;
 }
 
 // ---------------------------------------------------------------------------

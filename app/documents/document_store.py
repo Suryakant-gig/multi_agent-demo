@@ -28,6 +28,25 @@ class DocumentStore:
         document_repository.save_chunks(chunks, session_id=session_id)
         logger.info(f"Stored {len(chunks)} document chunks in PostgreSQL for session '{session_id}'")
 
+        try:
+            from app.state.session_manager import session_manager
+            from app.models.domain import DocumentMetadata
+            session = session_manager.get_session(session_id)
+            for c in chunks:
+                if c.document_id not in session.documents:
+                    doc_meta = DocumentMetadata(
+                        document_id=c.document_id,
+                        file_name=c.file_name,
+                        file_size_bytes=sum(len(chk.text.encode('utf-8')) for chk in chunks if chk.document_id == c.document_id),
+                        page_count=max(chk.page_number for chk in chunks if chk.document_id == c.document_id),
+                        chunk_count=sum(1 for chk in chunks if chk.document_id == c.document_id)
+                    )
+                    session.documents[c.document_id] = doc_meta
+                    if not session.active_document_id:
+                        session.active_document_id = c.document_id
+        except Exception as e:
+            logger.debug(f"Could not auto-register document in session: {e}")
+
     def get_chunks(self, session_id: str, document_id: Optional[str] = None) -> List[DocumentChunk]:
         """
         Retrieves document chunks for a session, optionally filtered by document_id.

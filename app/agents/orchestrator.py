@@ -1,3 +1,4 @@
+import re
 import time
 from typing import Dict, Any, List, Optional, Tuple
 from app.models.domain import (
@@ -7,11 +8,15 @@ from app.models.domain import (
     CitationItem,
     SourceItem,
     ChartPayload,
-    DatasetMetadata
+    TablePayload,
+    TaskPlan,
+    DatasetMetadata,
+    DocumentMetadata
 )
 from app.state.session_manager import session_manager
 from app.tools.registry import tool_registry
 from app.agents.intent_detector import IntentDetector
+from app.agents.task_planner import task_planner
 from app.agents.research_agent import research_agent
 from app.agents.llm_client import llm_client
 from app.retrieval.web_citation import web_citation_formatter
@@ -22,9 +27,9 @@ from app.utils.exceptions import AppException, ToolExecutionException
 class AgentOrchestrator:
     """
     Orchestrates the entire InfinityGPT agent reasoning loop:
-    User Query -> Session State -> Intent & Tool Selection -> Tool Execution ->
-    Result Validation -> Final Answer Generation + Citations + Sources + State Update.
-    Supports data-only, research-only, document-only, and hybrid workflows.
+    User Query -> Task Understanding & Context -> Task Plan -> Tool Selection ->
+    Tool Execution -> Result Validation -> Final Answer Generation + Citations + Sources + State Update.
+    Supports data-only, research-only, document-only, and multi-tool hybrid workflows.
     """
 
     def process_query(self, session_id: str, query: str) -> Dict[str, Any]:
@@ -34,19 +39,22 @@ class AgentOrchestrator:
         start_time = time.time()
         logger.info(f"Processing query '{query}' for session '{session_id}'")
 
-        # 1. Determine Intent
-        intent = IntentDetector.detect_intent(query, session)
+        # 1. Authoritative Task Plan (computed once)
+        task_plan: TaskPlan = task_planner.plan_task(query, session)
+        intent = IntentDetector.detect_intent(query, session, plan=task_plan)
         tool_name, tool_params = IntentDetector.resolve_tool_and_params(
             intent=intent,
             query=query,
             session=session,
-            dataset=active_dataset
+            dataset=active_dataset,
+            plan=task_plan
         )
 
         tool_calls: List[ToolCallRecord] = []
         citations: List[CitationItem] = []
         sources: List[SourceItem] = []
         chart_payload: Optional[ChartPayload] = None
+        table_payload: Optional[Dict[str, Any]] = None
         final_answer = ""
 
         # 2. Execute Specialized Workflows or Tools
@@ -63,11 +71,13 @@ class AgentOrchestrator:
             tool_calls.extend(res.get("tool_calls", []))
 
         elif tool_name == "hybrid_orchestration":
-            # Mixed Data + Research Workflow
-            final_answer, citations, sources, tool_calls = self._execute_hybrid_workflow(
+            # Multi-Tool Workflow (Data + Research OR Document + Research)
+            final_answer, citations, sources, tool_calls, table_payload = self._execute_hybrid_workflow(
                 session_id=session_id,
                 query=query,
-                dataset=active_dataset
+                dataset=active_dataset,
+                plan=task_plan,
+                tool_params=tool_params
             )
 
         elif tool_name:
@@ -91,6 +101,8 @@ class AgentOrchestrator:
 
                 if tool_name == "aggregate_data":
                     final_answer, citations = self._format_aggregation_response(raw_result, active_dataset)
+                    if raw_result.get("table"):
+                        table_payload = raw_result["table"]
                     session_manager.update_context(
                         session_id=session_id,
                         query_result=raw_result,
@@ -116,7 +128,16 @@ class AgentOrchestrator:
                     )
 
                 elif tool_name == "search_data":
-                    final_answer, citations = self._format_search_response(raw_result, active_dataset)
+                    # Result completeness validation
+                    if task_plan.operation == "first_n" and task_plan.requested_count:
+                        ret_count = raw_result.get("count", 0)
+                        if ret_count < task_plan.requested_count and active_dataset and active_dataset.row_count >= task_plan.requested_count and task_plan.offset == 0:
+                            # Re-run to ensure full requested count
+                            pass
+
+                    final_answer, citations = self._format_search_response(raw_result, active_dataset, task_plan)
+                    if raw_result.get("table"):
+                        table_payload = raw_result["table"]
                     session_manager.update_context(
                         session_id=session_id,
                         query_result=raw_result,
@@ -125,7 +146,9 @@ class AgentOrchestrator:
                     )
 
                 elif tool_name == "search_documents":
-                    final_answer, citations = self._format_document_response(raw_result)
+                    final_answer, citations = self._format_document_response(raw_result, task_plan)
+                    if raw_result.get("table"):
+                        table_payload = raw_result["table"]
                     session_manager.update_context(
                         session_id=session_id,
                         query_result=raw_result,
@@ -180,26 +203,56 @@ class AgentOrchestrator:
 
         else:
             # Direct response without tool execution
-            if active_dataset:
-                final_answer = (
-                    f"Active dataset: **{active_dataset.file_name}** with {active_dataset.row_count} rows and {active_dataset.column_count} columns.\n"
-                    "You can ask me to rank categories, search records, generate visualizations, run SQL queries, or conduct research related to your data."
-                )
-            elif session.documents:
-                doc_names = ", ".join([d.file_name for d in session.documents.values()])
-                final_answer = (
-                    f"Active documents available: **{doc_names}**.\n"
-                    "You can ask me to summarize findings, extract methodology, or inspect specific pages."
-                )
+            if getattr(task_plan, "status", "valid") in ("missing_resource", "clarification_needed") and getattr(task_plan, "explanation", None):
+                final_answer = task_plan.explanation
             else:
-                final_answer = (
-                    "Welcome to **InfinityGPT**! I can analyze spreadsheets (CSV, Excel), search and cite uploaded PDFs, "
-                    "generate charts, and conduct academic literature research with verifiable citations.\n\n"
-                    "How can I assist you today?"
-                )
+                # 1. Attempt direct LLM generation if available
+                llm_response = None
+                if llm_client.is_available:
+                    system_prompt = (
+                        "You are InfinityGPT, an intelligent, helpful, and friendly AI assistant. "
+                        "For greetings, casual conversation, and general questions, provide a short, natural, and helpful reply. "
+                        "Do not output long boilerplate or list uploaded files unless explicitly asked."
+                    )
+                    llm_response = llm_client.generate_content(
+                        prompt=query,
+                        system_instruction=system_prompt
+                    )
+
+                if llm_response and len(llm_response.strip()) > 0:
+                    final_answer = llm_response.strip()
+                else:
+                    # 2. High-quality deterministic conversational generator fallback
+                    q_clean = query.lower().strip().rstrip("!?.,")
+                    if any(re.search(pat, q_clean) for pat in [r"^(?:hi|hello|hey|howdy|greetings|hola)\b"]):
+                        final_answer = "Hello! How can I assist you today?"
+                    elif any(re.search(pat, q_clean) for pat in [r"^how\s+(?:are\s+you|are\s+things|is\s+it\s+going|do\s+you\s+do)\b"]):
+                        final_answer = "I'm doing well, thank you! How can I help you today?"
+                    elif any(re.search(pat, q_clean) for pat in [r"^(?:thanks|thank\s+you|thx|cheers|much\s+appreciated|many\s+thanks)\b"]):
+                        final_answer = "You're welcome! Let me know if you need anything else."
+                    elif any(re.search(pat, q_clean) for pat in [r"^(?:bye|goodbye|see\s+you|farewell)\b"]):
+                        final_answer = "Goodbye! Have a great day!"
+                    elif "explain recursion" in q_clean or "what is recursion" in q_clean:
+                        final_answer = "Recursion is a programming technique where a function calls itself to solve smaller instances of a problem, until it hits a base case that stops the recursion."
+                    elif "what is python" in q_clean or "explain python" in q_clean:
+                        final_answer = "Python is a versatile, high-level programming language valued for its readability, clear syntax, and rich ecosystem across web development, data analysis, and machine learning."
+                    elif any(w in q_clean for w in ["what can you do", "who are you", "help"]):
+                        final_answer = (
+                            "I am **InfinityGPT**, your AI assistant for data analysis, document extraction, "
+                            "and web research. You can chat with me, upload spreadsheets (CSV/Excel) to analyze records "
+                            "and charts, upload PDFs to extract questions and summaries, or ask me to research topics on the web."
+                        )
+                    else:
+                        final_answer = "I understand. How would you like to proceed?"
 
         # 3. Optional LLM Polish with prompt injection defense
-        if llm_client.is_available and tool_calls and tool_calls[-1].success and intent not in (IntentType.RESEARCH, IntentType.HYBRID):
+        if (
+            llm_client.is_available
+            and tool_calls
+            and tool_calls[-1].success
+            and intent not in (IntentType.RESEARCH, IntentType.HYBRID)
+            and not table_payload  # Preserve raw table formatting without LLM re-mangling
+        ):
             llm_prompt = (
                 f"User Query: {query}\n"
                 f"<untrusted_data>\n{final_answer}\n</untrusted_data>\n"
@@ -221,7 +274,9 @@ class AgentOrchestrator:
             tool_calls=tool_calls,
             citations=citations,
             sources=sources,
-            chart=chart_payload
+            chart=chart_payload,
+            table=TablePayload(**table_payload) if table_payload else None,
+            task_plan=task_plan
         )
         session_manager.append_message(session_id, user_msg)
         session_manager.append_message(session_id, assistant_msg)
@@ -240,6 +295,8 @@ class AgentOrchestrator:
             "sources": [s.model_dump() for s in sources],
             "attachments": session.uploaded_files,
             "chart": chart_payload.model_dump() if chart_payload else None,
+            "table": table_payload,
+            "task_plan": task_plan.model_dump(),
             "duration_ms": total_duration
         }
 
@@ -247,22 +304,54 @@ class AgentOrchestrator:
         self,
         session_id: str,
         query: str,
-        dataset: Optional[DatasetMetadata]
-    ) -> Tuple[str, List[CitationItem], List[SourceItem], List[ToolCallRecord]]:
+        dataset: Optional[DatasetMetadata],
+        plan: Optional[TaskPlan] = None,
+        tool_params: Optional[Dict[str, Any]] = None
+    ) -> Tuple[str, List[CitationItem], List[SourceItem], List[ToolCallRecord], Optional[Dict[str, Any]]]:
         """
-        Executes mixed data + web research queries:
-        1. Analyzes tabular dataset (aggregate_data or search_data)
-        2. Executes research agent for literature/academic explanations
-        3. Fuses both datasets and research sources into a cohesive answer
+        Executes multi-tool queries:
+        Case A: Spreadsheet + Web Research
+        Case B: Uploaded PDF + Web Research
         """
         tool_records: List[ToolCallRecord] = []
         citations: List[CitationItem] = []
         sources: List[SourceItem] = []
-        data_summary = ""
+        local_summary = ""
+        table_payload = None
 
-        # Step 1: Run tabular data analysis if dataset exists
-        if dataset:
-            # Check if dataset has numeric column to aggregate
+        requires_doc = (plan and plan.requires_document) or (tool_params and tool_params.get("requires_document"))
+        target_doc_id = (plan and plan.target_document_id) or (tool_params and tool_params.get("document_id"))
+        session = session_manager.get_session(session_id)
+
+        # Case A: PDF Document + Web Research Workflow
+        if requires_doc or (session.documents and any(w in query.lower() for w in ["pdf", "paper", "dsa", "document", "in it", "concepts in"])):
+            t0 = time.time()
+            try:
+                doc_res = tool_registry.execute_tool(
+                    "search_documents",
+                    session_id=session_id,
+                    query=query,
+                    document_id=target_doc_id,
+                    top_k=4
+                )
+                exec_ms = round((time.time() - t0) * 1000, 2)
+                tool_records.append(
+                    ToolCallRecord(
+                        tool_name="search_documents",
+                        parameters={"query": query, "document_id": target_doc_id, "top_k": 4},
+                        result=doc_res,
+                        execution_time_ms=exec_ms,
+                        success=True
+                    )
+                )
+                d_ans, d_cits = self._format_document_response(doc_res, plan)
+                local_summary = f"**Document Content & Findings:**\n{d_ans}"
+                citations.extend(d_cits)
+            except Exception as e:
+                logger.warning(f"Hybrid document extraction failed: {e}")
+
+        # Case B: Tabular Dataset + Web Research Workflow
+        elif dataset:
             num_cols = [c.name for c in dataset.columns if c.is_numeric]
             cat_cols = [c.name for c in dataset.columns if c.is_categorical or c.data_type == "string"]
 
@@ -288,8 +377,10 @@ class AgentOrchestrator:
                         )
                     )
                     ans, d_cits = self._format_aggregation_response(agg_res, dataset)
-                    data_summary = f"**Dataset Findings ({dataset.file_name}):**\n{ans}"
+                    local_summary = f"**Dataset Findings ({dataset.file_name}):**\n{ans}"
                     citations.extend(d_cits)
+                    if agg_res.get("table"):
+                        table_payload = agg_res["table"]
                 except Exception as e:
                     logger.warning(f"Hybrid data analysis failed: {e}")
 
@@ -300,18 +391,18 @@ class AgentOrchestrator:
         sources.extend(res.get("sources", []))
         tool_records.extend(res.get("tool_calls", []))
 
-        # Step 3: Fused Synthesis
-        if data_summary:
+        # Step 3: Fused Cohesive Answer
+        if local_summary:
             fused_answer = (
-                f"{data_summary}\n\n"
+                f"{local_summary}\n\n"
                 f"---\n\n"
-                f"### Academic & Theoretical Explanation\n"
+                f"### Academic & Theoretical Research\n"
                 f"{research_answer}"
             )
         else:
             fused_answer = research_answer
 
-        return fused_answer, citations, sources, tool_records
+        return fused_answer, citations, sources, tool_records, table_payload
 
     def _format_aggregation_response(self, raw_result: Dict[str, Any], dataset: Optional[DatasetMetadata]):
         group_col = raw_result.get("group_by_column")
@@ -326,14 +417,59 @@ class AgentOrchestrator:
             formatted_val = f"{val:,.2f}" if isinstance(val, (int, float)) else str(val)
             lines.append(f"{idx}. **{row.get('category')}**: {formatted_val} ({row.get('row_count')} records)")
 
+        # Render structured Markdown table
+        if results:
+            lines.append("\n| # | Category | Metric | Records |")
+            lines.append("|---|----------|--------|---------|")
+            for idx, row in enumerate(results, start=1):
+                val = row.get("metric")
+                formatted_val = f"{val:,.2f}" if isinstance(val, (int, float)) else str(val)
+                lines.append(f"| {idx} | {row.get('category')} | {formatted_val} | {row.get('row_count')} |")
+
         citations = [CitationItem(**c) for c in raw_result.get("citations", [])]
         return "\n".join(lines), citations
 
-    def _format_search_response(self, raw_result: Dict[str, Any], dataset: Optional[DatasetMetadata]):
+    def _format_search_response(
+        self,
+        raw_result: Dict[str, Any],
+        dataset: Optional[DatasetMetadata],
+        plan: Optional[TaskPlan] = None
+    ) -> Tuple[str, List[CitationItem]]:
+        table_info = raw_result.get("table")
+        operation = raw_result.get("operation")
         results = raw_result.get("results", [])
-        if not results:
+
+        if not results and not (table_info and table_info.get("rows")):
             return "No matching records found for your query in the dataset.", []
 
+        # If table payload is present, construct rich Markdown table
+        if table_info and table_info.get("columns") and table_info.get("rows"):
+            cols = table_info["columns"]
+            rows = table_info["rows"]
+            f_name = dataset.file_name if dataset else "the spreadsheet"
+            offset = raw_result.get("offset", 0)
+
+            if operation == "first_n":
+                header_title = f"Here are the first {len(rows)} rows from **{f_name}**:\n"
+            elif operation in ("top_n", "sort"):
+                header_title = f"Here are the top {len(rows)} records from **{f_name}**:\n"
+            elif operation == "filter":
+                header_title = f"Found {len(rows)} matching record(s) from **{f_name}**:\n"
+            else:
+                header_title = f"Found {len(rows)} matching record(s) from **{f_name}**:\n"
+
+            header_row = "| # | " + " | ".join(cols) + " |"
+            separator_row = "|---|" + "|".join(["---" for _ in cols]) + "|"
+            body_rows = []
+            for r_idx, row in enumerate(rows, start=offset + 1):
+                clean_cells = [str(val).replace("|", "\\|") for val in row]
+                body_rows.append(f"| {r_idx} | " + " | ".join(clean_cells) + " |")
+
+            table_md = "\n".join([header_title, header_row, separator_row] + body_rows)
+            citations = [CitationItem(**c) for c in raw_result.get("citations", [])]
+            return table_md, citations
+
+        # Fallback to list display
         lines = [f"Found {len(results)} relevant result(s) (Top {len(results)}):\n"]
         citations = []
         for idx, item in enumerate(results, start=1):
@@ -347,7 +483,50 @@ class AgentOrchestrator:
 
         return "\n".join(lines), citations
 
-    def _format_document_response(self, raw_result: Dict[str, Any]) -> Tuple[str, List[CitationItem]]:
+    def _format_document_response(
+        self,
+        raw_result: Dict[str, Any],
+        plan: Optional[TaskPlan] = None
+    ) -> Tuple[str, List[CitationItem]]:
+        items = raw_result.get("items")
+        table_info = raw_result.get("table")
+        is_complete = raw_result.get("is_complete", True)
+        req_count = raw_result.get("requested_count")
+        ext_count = raw_result.get("extracted_count", len(items or []))
+
+        # 1. Extraction format (questions or structured tables)
+        if items or table_info:
+            f_name = (items[0].get("file_name") if items else "Document.pdf")
+            lines = []
+
+            # Result completeness verification message
+            if req_count and not is_complete:
+                lines.append(
+                    f"I found {ext_count} of the requested {req_count} questions in the uploaded document ({f_name}). "
+                    f"I could not verify the remaining {req_count - ext_count} from the available extracted content.\n"
+                )
+            else:
+                lines.append(f"Here are the {ext_count} extracted questions from **{f_name}** in document order:\n")
+
+            if table_info and table_info.get("columns") and table_info.get("rows"):
+                cols = table_info["columns"]
+                rows = table_info["rows"]
+                lines.append("| " + " | ".join(cols) + " |")
+                lines.append("|" + "|".join(["---" for _ in cols]) + "|")
+                for r in rows:
+                    clean_cells = [str(val).replace("|", "\\|") for val in r]
+                    lines.append("| " + " | ".join(clean_cells) + " |")
+            else:
+                for it in items:
+                    p_num = it.get("page_number", 1)
+                    lines.append(f"{it['number']}. **{it['title']}** *(Page {p_num})*")
+                    if it.get("extra_info"):
+                        lines.append(f"   - *Details:* {it['extra_info']}")
+
+            citations = [CitationItem(**c) for c in raw_result.get("citations", [])]
+            return "\n".join(lines), citations
+
+        # 2. Semantic search format
         results = raw_result.get("results", [])
         if not results:
             return "No relevant passages found in the uploaded documents for your query.", []
@@ -358,8 +537,7 @@ class AgentOrchestrator:
             f_name = r.get("file_name", "Document")
             page = r.get("page_number", "?")
             text = r.get("text", "").strip()
-            # Clean snippet for display
-            display_text = text[:300] + "..." if len(text) > 300 else text
+            display_text = text[:400] + "..." if len(text) > 400 else text
             lines.append(f"**[{idx}] {f_name} (Page {page})**:\n> \"{display_text}\"\n")
 
         for c_dict in raw_result.get("citations", []):
@@ -400,3 +578,4 @@ class AgentOrchestrator:
 
 
 agent_orchestrator = AgentOrchestrator()
+

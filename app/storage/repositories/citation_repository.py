@@ -33,8 +33,8 @@ class CitationRepository:
                     page_number=c.page_number,
                     row_index=c.row_index,
                     url=c.url,
-                    title=c.title,
-                    domain=c.domain,
+                    title=(c.title[:500] if c.title else None),
+                    domain=(c.domain[:250] if c.domain else None),
                     snippet=c.snippet
                 )
                 db.add(rec)

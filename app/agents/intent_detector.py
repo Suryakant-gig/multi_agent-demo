@@ -2,6 +2,7 @@ import re
 from typing import Dict, Any, Tuple, Optional, List
 from app.models.domain import IntentType, DatasetMetadata, ChartType
 from app.state.state_models import SessionState
+from app.agents.task_planner import task_planner
 from app.utils.logger import logger
 
 
@@ -10,6 +11,7 @@ class IntentDetector:
     Understands user intent and resolves parameters using contextual semantics,
     dataset schema analysis, cross-turn history (coreference resolution),
     document retrieval detection, and research intent routing.
+    Leverages TaskPlanner for structured internal task plans.
     """
 
     CHART_KEYWORDS = {"chart", "plot", "graph", "visualize", "visualization", "histogram", "pie", "bar", "scatter"}
@@ -19,57 +21,28 @@ class IntentDetector:
     WEB_SEARCH_KEYWORDS = {"search the internet", "search the web", "search online", "official docs", "official documentation", "google search"}
 
     @classmethod
-    def detect_intent(cls, query: str, session: SessionState) -> IntentType:
-        q_lower = query.lower()
+    def detect_intent(cls, query: str, session: SessionState, plan: Optional[Any] = None) -> IntentType:
+        if plan is None:
+            plan = task_planner.plan_task(query, session)
 
-        has_active_dataset = bool(session.active_file_id and session.active_file_id in session.files)
-        has_active_documents = bool(session.documents)
-
-        # 1. Check for Hybrid (Mixed Data + Research)
-        has_data_mention = any(w in q_lower for w in ["dataset", "sales", "data", "excel", "csv", "table", "my trend", "my pattern", "uploaded data"])
-        has_research_mention = any(w in q_lower for w in ["research", "paper", "papers", "literature", "consumer demand", "explain using research", "consistent with research"])
-        if (has_data_mention or has_active_dataset) and has_research_mention and any(w in q_lower for w in ["explain", "consistent", "theory", "literature", "why", "pattern", "trend"]):
+        if plan.task_type == "mixed":
             return IntentType.HYBRID
-
-        # 2. Check for PDF Document Search
-        if (has_active_documents or "pdf" in q_lower or re.search(r"\bpage\s+\d+\b", q_lower)) and not has_data_mention:
-            if re.search(r"\bpage\s+\d+\b", q_lower) or any(w in q_lower for w in ["in this paper", "in the pdf", "in the document", "methodology", "section", "abstract"]):
-                return IntentType.DOCUMENT_SEARCH
-
-        # 3. Check for Research Agent Request
-        if any(w in q_lower for w in cls.RESEARCH_KEYWORDS) or re.search(r"\b\d+\s+papers\b", q_lower) or q_lower.startswith("research "):
-            # Ensure it's not a dataset column search (e.g. if dataset has a column called "paper")
+        elif plan.task_type == "research":
             return IntentType.RESEARCH
-
-        # 4. Check for Web Search
-        if any(w in q_lower for w in cls.WEB_SEARCH_KEYWORDS) or q_lower.startswith("search for ") or "what happened recently with" in q_lower:
+        elif plan.task_type == "web_search":
             return IntentType.WEB_SEARCH
-
-        # 5. Coreference chart request (e.g. "make a chart for that", "visualize this")
-        if any(w in q_lower for w in cls.CHART_KEYWORDS):
-            return IntentType.VISUALIZATION
-
-        # 6. Schema inspection
-        if any(w in q_lower for w in cls.SCHEMA_KEYWORDS):
-            return IntentType.SCHEMA_INSPECTION
-
-        # 7. Aggregation / data analysis (Top-K, SUM, AVG)
-        if any(w in q_lower for w in cls.ANALYSIS_KEYWORDS) or re.search(r"top\s+\d+", q_lower):
-            return IntentType.DATA_ANALYSIS
-
-        # 8. Search / retrieval in dataset
-        if any(w in q_lower for w in ["find", "search", "show me", "get", "where", "filter", "which"]):
-            if has_active_dataset:
-                return IntentType.SEARCH_RETRIEVAL
-            if has_active_documents:
-                return IntentType.DOCUMENT_SEARCH
-            return IntentType.WEB_SEARCH
-
-        # 9. Fallback based on session state
-        if has_active_dataset:
-            return IntentType.SEARCH_RETRIEVAL
-        if has_active_documents:
+        elif plan.task_type in ("document_extraction", "document_search"):
             return IntentType.DOCUMENT_SEARCH
+        elif plan.task_type == "visualization":
+            return IntentType.VISUALIZATION
+        elif plan.task_type == "schema_inspection":
+            return IntentType.SCHEMA_INSPECTION
+        elif plan.task_type == "data_analysis":
+            return IntentType.DATA_ANALYSIS
+        elif plan.task_type == "data_extraction":
+            return IntentType.SEARCH_RETRIEVAL
+        elif plan.task_type == "direct_answer":
+            return IntentType.DIRECT_ANSWER
 
         return IntentType.DIRECT_ANSWER
 
@@ -93,37 +66,63 @@ class IntentDetector:
         intent: IntentType,
         query: str,
         session: SessionState,
-        dataset: Optional[DatasetMetadata]
+        dataset: Optional[DatasetMetadata] = None,
+        plan: Optional[Any] = None
     ) -> Tuple[Optional[str], Dict[str, Any]]:
         q_lower = query.lower()
+        if plan is None:
+            plan = task_planner.plan_task(query, session)
 
-        # A. Research Intent -> Dedicated Research Agent workflow
-        if intent == IntentType.RESEARCH:
-            # Parse desired number of papers if specified
-            top_k = 5
-            count_match = re.search(r"\b(\d+)\s*papers\b", q_lower)
-            if count_match:
-                top_k = int(count_match.group(1))
+        # Missing resources or clarification needed -> Direct explanation from plan, no tool execution
+        if getattr(plan, "status", "valid") in ("missing_resource", "clarification_needed"):
+            return None, {}
+
+        # Direct Answer -> No tool execution
+        if intent == IntentType.DIRECT_ANSWER or plan.task_type == "direct_answer":
+            return None, {}
+
+        # A. Hybrid Intent (Data + Research or Document + Research)
+        if intent == IntentType.HYBRID or plan.task_type == "mixed":
+            return "hybrid_orchestration", {
+                "query": query,
+                "requires_document": plan.requires_document,
+                "requires_data": plan.requires_data,
+                "document_id": plan.target_document_id,
+                "file_id": plan.target_file_id
+            }
+
+        # B. Research Intent -> Dedicated Research Agent workflow
+        elif intent == IntentType.RESEARCH or plan.task_type == "research":
+            top_k = plan.requested_count or 5
             return "research_agent", {"query": query, "max_sources": top_k}
 
-        # B. Web Search Intent
-        elif intent == IntentType.WEB_SEARCH:
+        # C. Web Search Intent
+        elif intent == IntentType.WEB_SEARCH or plan.task_type == "web_search":
             return "web_search", {"query": query, "top_k": 5}
 
-        # C. Document Search Intent (PDF)
-        elif intent == IntentType.DOCUMENT_SEARCH:
-            return "search_documents", {"query": query, "top_k": 4}
-
-        # D. Hybrid Intent (Data + Research)
-        elif intent == IntentType.HYBRID:
-            return "hybrid_orchestration", {"query": query}
+        # D. Document Search / Extraction Intent (PDF)
+        elif intent in (IntentType.DOCUMENT_SEARCH, IntentType.DOCUMENT_EXTRACTION) or plan.task_type in ("document_extraction", "document_search"):
+            if plan.operation == "extract" or plan.task_type == "document_extraction":
+                return "search_documents", {
+                    "query": query,
+                    "operation": "extract",
+                    "requested_count": plan.requested_count,
+                    "offset": plan.offset,
+                    "target_range": plan.target_range,
+                    "document_id": plan.target_document_id
+                }
+            return "search_documents", {
+                "query": query,
+                "operation": "search",
+                "top_k": 4,
+                "document_id": plan.target_document_id
+            }
 
         # E. Visualization
-        elif intent == IntentType.VISUALIZATION:
+        elif intent == IntentType.VISUALIZATION or plan.task_type == "visualization":
             last_tool = session.last_tool_call
             params: Dict[str, Any] = {}
 
-            # Detect chart type
             chart_type = "bar"
             if "line" in q_lower or "trend" in q_lower or "time" in q_lower:
                 chart_type = "line"
@@ -134,7 +133,6 @@ class IntentDetector:
             elif "histogram" in q_lower or "distribution" in q_lower:
                 chart_type = "histogram"
 
-            # Check if referring to last aggregation result
             if last_tool and last_tool.tool_name == "aggregate_data" and (
                 "that" in q_lower or "this" in q_lower or "it" in q_lower or "result" in q_lower or "previous" in q_lower or len(q_lower.split()) <= 6
             ):
@@ -149,7 +147,6 @@ class IntentDetector:
                 }
                 return "generate_chart", params
 
-            # Inferred columns from dataset
             if dataset:
                 cols = dataset.columns
                 cat_cols = [c.name for c in cols if c.is_categorical or c.data_type == "string"]
@@ -178,9 +175,13 @@ class IntentDetector:
                 }
                 return "generate_chart", params
 
-        # F. Data Analysis (Aggregation)
-        elif intent == IntentType.DATA_ANALYSIS:
-            top_k = 5
+        # F. Schema Inspection
+        elif intent == IntentType.SCHEMA_INSPECTION or plan.task_type == "schema_inspection":
+            return "inspect_schema", {"sample_limit": 5}
+
+        # G. Data Analysis (Aggregation)
+        elif intent == IntentType.DATA_ANALYSIS or plan.task_type == "data_analysis":
+            top_k = plan.requested_count or 5
             match_top = re.search(r"top\s+(\d+)", q_lower)
             if match_top:
                 top_k = int(match_top.group(1))
@@ -202,8 +203,8 @@ class IntentDetector:
                 cat_cols = [c.name for c in cols if c.is_categorical or c.data_type == "string"]
                 num_cols = [c.name for c in cols if c.is_numeric]
 
-                group_by = None
-                metric = None
+                group_by = plan.group_by_column
+                metric = plan.metric_column
 
                 for c in cols:
                     if cls.column_matches(c.name, q_lower):
@@ -223,21 +224,37 @@ class IntentDetector:
                         "metric_column": metric,
                         "aggregation": agg,
                         "top_k": top_k,
-                        "ascending": ascending
+                        "ascending": ascending,
+                        "file_id": plan.target_file_id
                     }
 
-            return "search_data", {"query": query, "top_k": top_k}
+            return "search_data", {
+                "query": query,
+                "operation": "first_n" if plan.operation == "first_n" else "search",
+                "n": top_k,
+                "file_id": plan.target_file_id
+            }
 
-        # G. Schema Inspection
-        elif intent == IntentType.SCHEMA_INSPECTION:
-            return "inspect_schema", {"sample_limit": 5}
-
-        # H. Search Retrieval (tabular)
-        elif intent == IntentType.SEARCH_RETRIEVAL:
-            top_k = 5
+        # H. Search / Extraction Retrieval (tabular)
+        elif intent in (IntentType.SEARCH_RETRIEVAL, IntentType.DATA_EXTRACTION) or plan.task_type == "data_extraction":
+            if plan.operation == "first_n":
+                return "search_data", {
+                    "operation": "first_n",
+                    "n": plan.requested_count or 5,
+                    "offset": plan.offset,
+                    "file_id": plan.target_file_id
+                }
+            elif plan.operation == "filter" and plan.filter_criteria:
+                return "search_data", {
+                    "operation": "filter",
+                    "filters": plan.filter_criteria,
+                    "n": plan.requested_count or 5,
+                    "file_id": plan.target_file_id
+                }
+            top_k = plan.requested_count or 5
             match_top = re.search(r"top\s+(\d+)", q_lower)
             if match_top:
                 top_k = int(match_top.group(1))
-            return "search_data", {"query": query, "top_k": top_k}
+            return "search_data", {"query": query, "top_k": top_k, "file_id": plan.target_file_id}
 
         return None, {}

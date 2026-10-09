@@ -209,25 +209,16 @@ Structure your response as follows:
         # 2. Deterministic high-quality synthesis fallback
         lines = [
             f"### Research Findings: {goal.title()}\n",
-            f"Based on a comprehensive review of **{len(ranked_sources)} authoritative publications and resources**, here is the synthesized overview:\n"
+            f"Based on **{len(ranked_sources)} authoritative sources**, here is the synthesized overview:\n"
         ]
 
-        # Comparative overview
-        lines.append("#### 1. Core Developments & Methodologies\n")
+        # Key sources and summaries
         for idx, s in enumerate(ranked_sources, start=1):
             title = s.get("title", "")
-            domain = s.get("domain", "")
             snippet = s.get("snippet", "")
             pub = s.get("published_at")
             pub_str = f" ({pub})" if pub else ""
-            lines.append(f"- **{title}**{pub_str}: {snippet}")
-
-        lines.append("\n#### 2. Comparative Analysis & Technical Insights\n")
-        lines.append(
-            "- **Retrieval Quality & Precision:** Dense representations capture latent semantics and conceptual similarity, while sparse indices (such as BM25) maintain exact term precision and rare entity recall. Combining both consistently achieves the highest mean reciprocal rank across benchmarks.\n"
-            "- **Evaluation & Faithfulness:** Recent frameworks prioritize reference-free metrics (faithfulness, answer relevance, and context precision) to identify hallucinations without requiring costly manual human annotations.\n"
-            "- **System Orchestration:** Moving from static single-pass retrieval to autonomous agentic loops allows dynamic query refinement, multi-hop evidence aggregation, and proactive tool invocation."
-        )
+            lines.append(f"{idx}. **{title}**{pub_str}: {snippet}")
 
         return "\n".join(lines)
 

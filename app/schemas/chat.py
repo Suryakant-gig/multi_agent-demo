@@ -30,6 +30,8 @@ class ChatResponse(BaseModel):
     sources: List[Dict[str, Any]] = Field(default_factory=list)
     attachments: List[Dict[str, Any]] = Field(default_factory=list)
     chart: Optional[Dict[str, Any]] = None
+    table: Optional[Dict[str, Any]] = None
+    task_plan: Optional[Dict[str, Any]] = None
     duration_ms: float
 
 

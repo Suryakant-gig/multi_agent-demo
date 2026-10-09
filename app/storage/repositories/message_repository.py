@@ -39,13 +39,15 @@ class MessageRepository:
         with self.get_session() as db:
             msg_id = f"msg_{uuid.uuid4().hex[:12]}"
             
-            # Serialize metadata (intent, tool_calls, citations, sources, chart)
+            # Serialize metadata (intent, tool_calls, citations, sources, chart, table, task_plan)
             meta = {
                 "intent": message.intent.value if message.intent else None,
                 "tool_calls": [tc.model_dump() for tc in message.tool_calls],
                 "citations": [c.model_dump() for c in message.citations],
                 "sources": [s.model_dump() for s in message.sources],
-                "chart": message.chart.model_dump() if message.chart else None
+                "chart": message.chart.model_dump() if message.chart else None,
+                "table": message.table.model_dump() if message.table else None,
+                "task_plan": message.task_plan.model_dump() if message.task_plan else None
             }
             clean_meta = sanitize_for_json(meta)
 
@@ -83,6 +85,9 @@ class MessageRepository:
                 citations = [CitationItem(**c) for c in meta.get("citations", [])]
                 sources = [SourceItem(**s) for s in meta.get("sources", [])]
                 chart = ChartPayload(**meta["chart"]) if meta.get("chart") else None
+                from app.models.domain import TablePayload, TaskPlan
+                table = TablePayload(**meta["table"]) if meta.get("table") else None
+                task_plan = TaskPlan(**meta["task_plan"]) if meta.get("task_plan") else None
 
                 msg = MessageRecord(
                     role=r.role,
@@ -92,7 +97,9 @@ class MessageRepository:
                     tool_calls=tool_calls,
                     citations=citations,
                     sources=sources,
-                    chart=chart
+                    chart=chart,
+                    table=table,
+                    task_plan=task_plan
                 )
                 result.append(msg)
             return result

@@ -22,6 +22,8 @@ class IntentType(str, Enum):
     RESEARCH = "research"
     WEB_SEARCH = "web_search"
     DOCUMENT_SEARCH = "document_search"
+    DOCUMENT_EXTRACTION = "document_extraction"
+    DATA_EXTRACTION = "data_extraction"
     HYBRID = "hybrid"
 
 
@@ -53,6 +55,7 @@ class DocumentChunk(BaseModel):
     file_name: str
     page_number: int
     text: str
+    document_order: int = 0
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
 
@@ -110,6 +113,48 @@ class ChartPayload(BaseModel):
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
 
+class TablePayload(BaseModel):
+    type: str = "table"
+    columns: List[str] = Field(default_factory=list)
+    rows: List[List[Any]] = Field(default_factory=list)
+    row_count: int = 0
+    source: Optional[Dict[str, Any]] = None
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+
+class TaskSource(BaseModel):
+    type: str  # "spreadsheet" | "uploaded_pdf" | "web" | "database"
+    file_id: Optional[str] = None
+    filename: Optional[str] = None
+
+
+class TaskPlan(BaseModel):
+    task_type: str  # "document_extraction", "document_search", "data_extraction", "data_analysis", "research", "mixed", "direct_answer", "visualization", "schema_inspection"
+    sources: List[TaskSource] = Field(default_factory=list)
+    operation: str = "extract"  # "first_n", "top_n", "filter", "aggregate", "search", "extract", "search_and_synthesize", "visualize", "inspect_schema"
+    requested_count: Optional[int] = None
+    target_page: Optional[int] = None
+    target_range: Optional[List[int]] = None  # e.g. [21, 30]
+    ordering: Optional[str] = None  # "document_order", "source_order", "metric_desc", "metric_asc", "relevance"
+    output_format: str = "table"  # "table", "research_list", "document_excerpts", "chart", "text"
+    requires_web: bool = False
+    requires_data: bool = False
+    requires_document: bool = False
+    metric_column: Optional[str] = None
+    group_by_column: Optional[str] = None
+    sort_column: Optional[str] = None
+    ascending: bool = False
+    filter_criteria: Optional[Dict[str, Any]] = None
+    query: str = ""
+    target_file_id: Optional[str] = None
+    target_document_id: Optional[str] = None
+    offset: int = 0
+    is_follow_up: bool = False
+    status: str = "valid"  # "valid", "missing_resource", "clarification_needed"
+    missing_resource: Optional[str] = None  # "spreadsheet", "document"
+    explanation: Optional[str] = None
+
+
 class ToolCallRecord(BaseModel):
     tool_name: str
     parameters: Dict[str, Any]
@@ -128,4 +173,6 @@ class MessageRecord(BaseModel):
     citations: List[CitationItem] = Field(default_factory=list)
     sources: List[SourceItem] = Field(default_factory=list)
     chart: Optional[ChartPayload] = None
+    table: Optional[TablePayload] = None
+    task_plan: Optional[TaskPlan] = None
 

@@ -81,7 +81,7 @@ class DocumentRepository:
             query = db.query(DocumentChunkModel)
             if document_id:
                 query = query.filter(DocumentChunkModel.document_id == document_id)
-            records = query.order_by(DocumentChunkModel.page_number.asc(), DocumentChunkModel.chunk_id.asc()).all()
+            records = query.order_by(DocumentChunkModel.page_number.asc()).all()
             
             # Filter by session_id in metadata if present
             results = []
@@ -96,9 +96,11 @@ class DocumentRepository:
                         file_name=meta.get("file_name", "Document"),
                         page_number=r.page_number,
                         text=r.content,
+                        document_order=meta.get("document_order", 0),
                         metadata=meta
                     )
                 )
+            results.sort(key=lambda c: (c.page_number, c.document_order, c.metadata.get("chunk_index", 0)))
             return results
 
     def get_chunks_by_page(self, session_id: str, page_number: int, document_id: Optional[str] = None) -> List[DocumentChunk]:
@@ -106,7 +108,7 @@ class DocumentRepository:
             query = db.query(DocumentChunkModel).filter(DocumentChunkModel.page_number == page_number)
             if document_id:
                 query = query.filter(DocumentChunkModel.document_id == document_id)
-            records = query.order_by(DocumentChunkModel.chunk_id.asc()).all()
+            records = query.all()
 
             results = []
             for r in records:
@@ -120,9 +122,11 @@ class DocumentRepository:
                         file_name=meta.get("file_name", "Document"),
                         page_number=r.page_number,
                         text=r.content,
+                        document_order=meta.get("document_order", 0),
                         metadata=meta
                     )
                 )
+            results.sort(key=lambda c: (c.document_order, c.metadata.get("chunk_index", 0)))
             return results
 
     def get_documents_for_conversation(self, conv_id: str) -> Dict[str, DocumentMetadata]:

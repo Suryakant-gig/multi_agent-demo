@@ -25,9 +25,10 @@ class DocumentChunker:
         pages: List[Dict[str, Any]]
     ) -> List[DocumentChunk]:
         """
-        Chunks pages preserving page numbers.
+        Chunks pages preserving page numbers, chunk order, and document sequence.
         """
         all_chunks: List[DocumentChunk] = []
+        doc_order = 0
 
         for page in pages:
             page_num = page["page_number"]
@@ -35,6 +36,9 @@ class DocumentChunker:
 
             if not page_text:
                 continue
+
+            # Detect table structure or list patterns
+            has_table = "|" in page_text or "\t" in page_text
 
             # If page fits within chunk_size, keep as a single chunk
             if len(page_text) <= self.chunk_size:
@@ -44,9 +48,17 @@ class DocumentChunker:
                     file_name=file_name,
                     page_number=page_num,
                     text=page_text,
-                    metadata={"page": page_num, "length": len(page_text)}
+                    document_order=doc_order,
+                    metadata={
+                        "page": page_num,
+                        "length": len(page_text),
+                        "chunk_index": 1,
+                        "document_order": doc_order,
+                        "has_table": has_table
+                    }
                 )
                 all_chunks.append(chunk)
+                doc_order += 1
                 continue
 
             # Break page into overlapping windows
@@ -60,6 +72,8 @@ class DocumentChunker:
                 # Attempt to break at paragraph or newline or space
                 if end < text_len:
                     break_point = page_text.rfind("\n\n", start, end)
+                    if break_point == -1 or break_point < start + (self.chunk_size // 2):
+                        break_point = page_text.rfind("\n", start, end)
                     if break_point == -1 or break_point < start + (self.chunk_size // 2):
                         break_point = page_text.rfind(". ", start, end)
                     if break_point == -1 or break_point < start + (self.chunk_size // 2):
@@ -76,10 +90,17 @@ class DocumentChunker:
                         file_name=file_name,
                         page_number=page_num,
                         text=chunk_str,
-                        metadata={"page": page_num, "chunk_index": chunk_idx}
+                        document_order=doc_order,
+                        metadata={
+                            "page": page_num,
+                            "chunk_index": chunk_idx,
+                            "document_order": doc_order,
+                            "has_table": "|" in chunk_str
+                        }
                     )
                     all_chunks.append(chunk)
                     chunk_idx += 1
+                    doc_order += 1
 
                 start += max(self.chunk_size - self.overlap, 1)
 

@@ -18,6 +18,34 @@ class VisualizationService:
     """
 
     @staticmethod
+    def _resolve_column(dataset: DatasetMetadata, col: Optional[str]) -> Optional[str]:
+        if not col:
+            return None
+        dataset_col_names = {c.name for c in dataset.columns}
+        if col in dataset_col_names:
+            return col
+        t = col.strip().lower()
+        for c in dataset.columns:
+            if c.name.lower() == t:
+                return c.name
+        for c in dataset.columns:
+            cn = c.name.lower()
+            if cn.endswith("y") and (cn[:-1] + "ies") == t:
+                return c.name
+            if (cn + "s") == t or (cn + "es") == t:
+                return c.name
+            if cn.rstrip("s") == t.rstrip("s"):
+                return c.name
+            if t.endswith("y") and (t[:-1] + "ies") == cn:
+                return c.name
+            if (t + "s") == cn or (t + "es") == cn:
+                return c.name
+        for c in dataset.columns:
+            if c.name.lower() in t or t in c.name.lower():
+                return c.name
+        return col
+
+    @staticmethod
     def _validate_columns(dataset: DatasetMetadata, columns: List[str]) -> None:
         dataset_col_names = {c.name for c in dataset.columns}
         for col in columns:
@@ -38,6 +66,9 @@ class VisualizationService:
         title: Optional[str] = None,
         top_k: int = 10
     ) -> ChartPayload:
+        x_column = self._resolve_column(dataset, x_column) or x_column
+        if y_column:
+            y_column = self._resolve_column(dataset, y_column) or y_column
         self._validate_columns(dataset, [x_column] + ([y_column] if y_column else []))
         
         table_name = dataset.db_table_name

@@ -27,9 +27,9 @@ class ResearchRepository:
                 rec = ResearchSourceModel(
                     id=src_id,
                     conversation_id=conv_id,
-                    title=s.title,
+                    title=(s.title[:500] if s.title else ""),
                     url=s.url,
-                    domain=s.domain,
+                    domain=(s.domain[:250] if s.domain else ""),
                     source_type=s.source_type,
                     published_at=s.published_at,
                     relevance_score=s.relevance_score,

@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     
     # LLM Settings
     GEMINI_API_KEY: Optional[str] = None
-    GEMINI_MODEL: str = "gemini-2.5-flash"
+    GEMINI_MODEL: str = "gemini-3.8-flash"
     OPENAI_API_KEY: Optional[str] = None
 
     # Research & Web Search Settings

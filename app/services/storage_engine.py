@@ -106,14 +106,17 @@ class StorageEngine:
         where_clause: Optional[str] = None,
         order_by: Optional[str] = None
     ) -> List[Dict[str, Any]]:
+        # Default order_by to source order (_row_id ASC) if not provided
+        effective_order = order_by if order_by else "_row_id ASC"
+
         # Query central engine first if available
         try:
             engine = get_engine()
             sql = f'SELECT * FROM "{table_name}"'
             if where_clause:
                 sql += f" WHERE {where_clause}"
-            if order_by:
-                sql += f" ORDER BY {order_by}"
+            if effective_order:
+                sql += f" ORDER BY {effective_order}"
             sql += f" LIMIT {int(limit)} OFFSET {int(offset)}"
             with engine.connect() as conn:
                 result = conn.execute(text(sql))
@@ -127,14 +130,80 @@ class StorageEngine:
             sql = f'SELECT _row_id, * FROM "{table_name}"' if "_row_id" in [c[1] for c in conn.execute(f'PRAGMA table_info("{table_name}")').fetchall()] else f'SELECT rowid as _row_id, * FROM "{table_name}"'
             if where_clause:
                 sql += f" WHERE {where_clause}"
-            if order_by:
-                sql += f" ORDER BY {order_by}"
+            if effective_order:
+                sql += f" ORDER BY {effective_order}"
             sql += " LIMIT ? OFFSET ?"
             cursor = conn.cursor()
             cursor.execute(sql, (limit, offset))
             return [_clean_row(dict(row)) for row in cursor.fetchall()]
         finally:
             conn.close()
+
+    def get_first_n(
+        self,
+        session_id: str,
+        table_name: str,
+        n: int = 5,
+        offset: int = 0
+    ) -> List[Dict[str, Any]]:
+        """
+        Retrieves the first N rows strictly in source dataset order (1-indexed).
+        """
+        return self.query_paginated(
+            session_id=session_id,
+            table_name=table_name,
+            limit=n,
+            offset=offset,
+            order_by="_row_id ASC"
+        )
+
+    def get_top_n(
+        self,
+        session_id: str,
+        table_name: str,
+        sort_column: str,
+        n: int = 5,
+        ascending: bool = False,
+        offset: int = 0
+    ) -> List[Dict[str, Any]]:
+        """
+        Retrieves the top N records sorted deterministically by the specified metric column.
+        """
+        safe_col = sort_column.replace('"', '""')
+        direction = "ASC" if ascending else "DESC"
+        return self.query_paginated(
+            session_id=session_id,
+            table_name=table_name,
+            limit=n,
+            offset=offset,
+            order_by=f'"{safe_col}" {direction}, _row_id ASC'
+        )
+
+    def filter_records(
+        self,
+        session_id: str,
+        table_name: str,
+        filters: Dict[str, Any],
+        limit: int = 5,
+        offset: int = 0
+    ) -> List[Dict[str, Any]]:
+        """
+        Retrieves records matching exact or case-insensitive filter criteria.
+        """
+        conditions = []
+        for col, val in filters.items():
+            safe_col = col.replace('"', '""')
+            safe_val = str(val).replace("'", "''")
+            conditions.append(f'LOWER(CAST("{safe_col}" AS TEXT)) = LOWER(\'{safe_val}\')')
+        where_str = " AND ".join(conditions) if conditions else None
+        return self.query_paginated(
+            session_id=session_id,
+            table_name=table_name,
+            limit=limit,
+            offset=offset,
+            where_clause=where_str,
+            order_by="_row_id ASC"
+        )
 
     def get_total_count(self, session_id: str, table_name: str, where_clause: Optional[str] = None) -> int:
         try:
