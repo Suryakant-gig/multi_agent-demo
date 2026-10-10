@@ -54,6 +54,19 @@ class ToolRegistry:
             return [tool.to_function_definition() for name, tool in self._tools.items() if name in core_names]
         return [tool.to_function_definition() for tool in self._tools.values()]
 
+    def get_langchain_tools(self, session_id: Optional[str] = None, core_only: bool = False) -> List[Any]:
+        """
+        Returns LangChain StructuredTool wrappers for registered tools.
+        If core_only=True, returns the 5 core data tools matching get_tool_definitions.
+        Binds session_id to each tool instance for trusted application context isolation.
+        """
+        if core_only:
+            core_names = {"search_data", "aggregate_data", "generate_chart", "inspect_schema", "query_sql"}
+            tools = [tool for name, tool in self._tools.items() if name in core_names]
+        else:
+            tools = list(self._tools.values())
+        return [tool.to_langchain_tool(session_id=session_id) for tool in tools]
+
 
     def execute_tool(self, tool_name: str, session_id: str, **kwargs) -> Dict[str, Any]:
         tool = self.get_tool(tool_name)
